@@ -154,13 +154,13 @@ async function initFiles(): Promise<void> {
       if (existsSync(sourcePath)) {
         const shouldCopyToWork = !existsSync(targetPath) || await isSourceNewer(sourcePath, targetPath)
         if (shouldCopyToWork) {
-          await cp(sourcePath, targetPath, { recursive: true })
+          await cp(sourcePath, targetPath, { recursive: true, force: true })
         }
       }
       if (existsSync(sourcePath)) {
         const shouldCopyToTest = !existsSync(testTargetPath) || await isSourceNewer(sourcePath, testTargetPath)
         if (shouldCopyToTest) {
-          await cp(sourcePath, testTargetPath, { recursive: true })
+          await cp(sourcePath, testTargetPath, { recursive: true, force: true })
         }
       }
     } catch (error) {

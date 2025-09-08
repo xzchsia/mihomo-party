@@ -184,12 +184,12 @@ export async function downloadSubStore(): Promise<void> {
     // 先解压到临时目录
     const zip = new AdmZip(Buffer.from(frontendRes.data))
     zip.extractAllTo(tempDir, true)
-    await cp(tempBackendPath, backendPath)
+    await cp(tempBackendPath, backendPath, { force: true })
     if (existsSync(frontendDir)) {
       await rm(frontendDir, { recursive: true })
     }
     mkdirSync(frontendDir, { recursive: true })
-    await cp(path.join(tempDir, 'dist'), frontendDir, { recursive: true })
+    await cp(path.join(tempDir, 'dist'), frontendDir, { recursive: true, force: true })
     await rm(tempDir, { recursive: true })
   } catch (error) {
     await systemLogger.error('substore.downloadFailed', error)
