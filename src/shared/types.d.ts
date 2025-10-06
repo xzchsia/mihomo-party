@@ -242,6 +242,7 @@ interface IAppConfig {
   connectionCardStatus?: CardStatus
   dnsCardStatus?: CardStatus
   logCardStatus?: CardStatus
+  hideConnectionCardWave?: boolean
   pauseSSID?: string[]
   mihomoCoreCardStatus?: CardStatus
   overrideCardStatus?: CardStatus
@@ -309,6 +310,7 @@ interface IAppConfig {
   restartAppShortcut?: string
   quitWithoutCoreShortcut?: string
   language?: 'zh-CN' | 'en-US' | 'ru-RU' | 'fa-IR'
+  triggerMainWindowBehavior?: 'show' | 'toggle'
 }
 
 interface IMihomoTunConfig {

@@ -63,7 +63,9 @@ const GeneralConfig: React.FC = () => {
     envType = [platform === 'win32' ? 'powershell' : 'bash'],
     autoCheckUpdate,
     appTheme = 'system',
-    language = 'zh-CN'
+    language = 'zh-CN',
+    triggerMainWindowBehavior = 'show',
+    hideConnectionCardWave = false
   } = appConfig || {}
 
   useEffect(() => {
@@ -395,6 +397,28 @@ const GeneralConfig: React.FC = () => {
             isSelected={disableAnimations}
             onValueChange={async (v) => {
               await patchAppConfig({ disableAnimations: v })
+            }}
+          />
+        </SettingItem>
+        <SettingItem title={t('settings.triggerMainWindowBehavior')} divider>
+          <Tabs
+            size="sm"
+            color="primary"
+            selectedKey={triggerMainWindowBehavior}
+            onSelectionChange={(key) => {
+              patchAppConfig({ triggerMainWindowBehavior: key as 'show' | 'toggle' })
+            }}
+          >
+            <Tab key="show" title={t('settings.triggerMainWindowBehaviorShow')} />
+            <Tab key="toggle" title={t('settings.triggerMainWindowBehaviorToggle')} />
+          </Tabs>
+        </SettingItem>
+        <SettingItem title={t('settings.hideConnectionCardWave')} divider>
+          <Switch
+            size="sm"
+            isSelected={hideConnectionCardWave}
+            onValueChange={async (v) => {
+              await patchAppConfig({ hideConnectionCardWave: v })
             }}
           />
         </SettingItem>

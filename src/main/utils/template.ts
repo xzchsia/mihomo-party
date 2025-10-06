@@ -26,6 +26,7 @@ export const defaultConfig: IAppConfig = {
   floatingWindowCompatMode: true,
   disableHardwareAcceleration: false,
   disableLoopbackDetector: false,
+  hideConnectionCardWave: false,
   disableEmbedCA: false,
   disableSystemCA: false,
   skipSafePathCheck: false,
@@ -46,7 +47,8 @@ export const defaultConfig: IAppConfig = {
     'substore'
   ],
   siderWidth: 250,
-  sysProxy: { enable: false, mode: 'manual' }
+  sysProxy: { enable: false, mode: 'manual' },
+  triggerMainWindowBehavior: 'show' // 添加默认值
 }
 
 export const defaultControledMihomoConfig: Partial<IMihomoConfig> = {
