@@ -36,17 +36,14 @@ const Mihomo: React.FC = () => {
   const {
     core = 'mihomo',
     specificVersion,
-    enableSmartCore = true,
+    enableSmartCore = false,
     enableSmartOverride = true,
     smartCoreUseLightGBM = false,
     smartCoreCollectData = false,
     smartCoreStrategy = 'sticky-sessions',
     maxLogDays = 7,
-    sysProxy,
-    disableLoopbackDetector,
-    disableEmbedCA,
-    disableSystemCA,
-    skipSafePathCheck } = appConfig || {}
+    sysProxy 
+  } = appConfig || {}
   const { controledMihomoConfig, patchControledMihomoConfig } = useControledMihomoConfig()
 
   interface WebUIPanel {
@@ -417,7 +414,7 @@ const Mihomo: React.FC = () => {
             </SettingItem>
 
             {/* Smart 覆写开关 */}
-            {enableSmartCore && (
+            {enableSmartCore && core === 'mihomo-smart' && (
               <SettingItem
                 title={
                   <div className="flex items-center gap-2">
@@ -1130,42 +1127,7 @@ const Mihomo: React.FC = () => {
               }}
             />
           </SettingItem>
-          <SettingItem title={t('mihomo.disableLoopbackDetector')} divider>
-            <Switch
-              size="sm"
-              isSelected={disableLoopbackDetector}
-              onValueChange={(v) => {
-                handleConfigChangeWithRestart('disableLoopbackDetector', v)
-              }}
-            />
-          </SettingItem>
-          <SettingItem title={t('mihomo.skipSafePathCheck')} divider>
-            <Switch
-              size="sm"
-              isSelected={skipSafePathCheck}
-              onValueChange={(v) => {
-                handleConfigChangeWithRestart('skipSafePathCheck', v)
-              }}
-            />
-          </SettingItem>
-          <SettingItem title={t('mihomo.disableEmbedCA')} divider>
-            <Switch
-              size="sm"
-              isSelected={disableEmbedCA}
-              onValueChange={(v) => {
-                handleConfigChangeWithRestart('disableEmbedCA', v)
-              }}
-            />
-          </SettingItem>
-          <SettingItem title={t('mihomo.disableSystemCA')} divider>
-            <Switch
-              size="sm"
-              isSelected={disableSystemCA}
-              onValueChange={(v) => {
-                handleConfigChangeWithRestart('disableSystemCA', v)
-              }}
-            />
-          </SettingItem>
+
           <SettingItem title={t('mihomo.logRetentionDays')} divider>
             <Input
               size="sm"
