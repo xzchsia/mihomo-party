@@ -223,6 +223,7 @@ interface IAppConfig {
   smartCoreUseLightGBM: boolean
   smartCoreCollectData: boolean
   smartCoreStrategy: 'sticky-sessions' | 'round-robin'
+  smartCollectorSize?: number
   proxyDisplayMode: 'simple' | 'full'
   proxyDisplayOrder: 'default' | 'delay' | 'name'
   profileDisplayDate?: 'expire' | 'update'
@@ -272,6 +273,7 @@ interface IAppConfig {
   originDNS?: string
   useWindowFrame: boolean
   proxyInTray: boolean
+  showCurrentProxyInTray: boolean
   siderOrder: string[]
   siderWidth: number
   appTheme: AppTheme
@@ -312,6 +314,16 @@ interface IAppConfig {
   quitWithoutCoreShortcut?: string
   language?: 'zh-CN' | 'en-US' | 'ru-RU' | 'fa-IR'
   triggerMainWindowBehavior?: 'show' | 'toggle'
+  showMixedPort?: number
+  enableMixedPort?: boolean
+  showSocksPort?: number
+  enableSocksPort?: boolean
+  showHttpPort?: number
+  enableHttpPort?: boolean
+  showRedirPort?: number
+  enableRedirPort?: boolean
+  showTproxyPort?: number
+  enableTproxyPort?: boolean
 }
 
 interface IMihomoTunConfig {
