@@ -61,7 +61,7 @@ export async function checkAutoRun(): Promise<boolean> {
         `chcp 437 && %SystemRoot%\\System32\\schtasks.exe /query /tn "${appName}"`
       )
       return stdout.includes(appName)
-    } catch (e) {
+    } catch {
       return false
     }
   }
@@ -88,14 +88,15 @@ export async function enableAutoRun(): Promise<void> {
     const isAdmin = await checkAdminPrivileges()
     await writeFile(taskFilePath, Buffer.from(`\ufeff${getTaskXml(isAdmin)}`, 'utf-16le'))
     if (isAdmin) {
-      await execPromise(`%SystemRoot%\\System32\\schtasks.exe /create /tn "${appName}" /xml "${taskFilePath}" /f`)
+      await execPromise(
+        `%SystemRoot%\\System32\\schtasks.exe /create /tn "${appName}" /xml "${taskFilePath}" /f`
+      )
     } else {
       try {
         await execPromise(
-          `powershell -Command "Start-Process schtasks -Verb RunAs -ArgumentList '/create', '/tn', '${appName}', '/xml', '${taskFilePath}', '/f' -WindowStyle Hidden"`
+          `powershell  -NoProfile -Command "Start-Process schtasks -Verb RunAs -ArgumentList '/create', '/tn', '${appName}', '/xml', '${taskFilePath}', '/f' -WindowStyle Hidden"`
         )
-      }
-      catch (e) {
+      } catch {
         await managerLogger.info('Maybe the user rejected the UAC dialog?')
       }
     }
@@ -140,8 +141,10 @@ export async function disableAutoRun(): Promise<void> {
       await execPromise(`%SystemRoot%\\System32\\schtasks.exe /delete /tn "${appName}" /f`)
     } else {
       try {
-        await execPromise(`powershell -Command "Start-Process schtasks -Verb RunAs -ArgumentList '/delete', '/tn', '${appName}', '/f' -WindowStyle Hidden"`)
-      } catch (e) {
+        await execPromise(
+          `powershell  -NoProfile -Command "Start-Process schtasks -Verb RunAs -ArgumentList '/delete', '/tn', '${appName}', '/f' -WindowStyle Hidden"`
+        )
+      } catch {
         await managerLogger.info('Maybe the user rejected the UAC dialog?')
       }
     }

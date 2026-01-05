@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import SettingCard from '../base/base-setting-card'
+import { toast } from '@renderer/components/base/toast'
 import SettingItem from '../base/base-setting-item'
 import { Button, Input, Select, SelectItem, Switch, Tab, Tabs, Tooltip } from '@heroui/react'
 import { BiCopy, BiSolidFileImport } from 'react-icons/bi'
@@ -50,7 +51,9 @@ const GeneralConfig: React.FC = () => {
     showTraffic = false,
     proxyInTray = true,
     showCurrentProxyInTray = false,
+    trayProxyGroupStyle = 'default',
     disableTray = false,
+    swapTrayClick = false,
     disableTrayIconColor = false,
     disableAnimations = false,
     showFloatingWindow: showFloating = false,
@@ -104,7 +107,7 @@ const GeneralConfig: React.FC = () => {
               await patchAppConfig({ disableHardwareAcceleration: pendingHardwareAccelValue })
               await relaunchApp()
             } catch (e) {
-              alert(e)
+              toast.error(String(e))
               setIsRelaunching(false)
             }
           }}
@@ -119,13 +122,14 @@ const GeneralConfig: React.FC = () => {
             selectedKeys={[language]}
             aria-label={t('settings.language')}
             onSelectionChange={async (v) => {
-              const newLang = Array.from(v)[0] as 'zh-CN' | 'en-US' | 'ru-RU' | 'fa-IR'
+              const newLang = Array.from(v)[0] as 'zh-CN' | 'zh-TW' | 'en-US' | 'ru-RU' | 'fa-IR'
               await patchAppConfig({ language: newLang })
               i18n.changeLanguage(newLang)
             }}
           >
-            <SelectItem key="zh-CN">中文简体</SelectItem>
             <SelectItem key="en-US">English</SelectItem>
+            <SelectItem key="zh-CN">简体中文</SelectItem>
+            <SelectItem key="zh-TW">繁體中文 (台灣)</SelectItem>
             <SelectItem key="ru-RU">Русский</SelectItem>
             <SelectItem key="fa-IR">فارسی</SelectItem>
           </Select>
@@ -137,7 +141,8 @@ const GeneralConfig: React.FC = () => {
             onValueChange={async (v) => {
               try {
                 // 检查管理员权限
-                const hasAdminPrivileges = await window.electron.ipcRenderer.invoke('checkAdminPrivileges')
+                const hasAdminPrivileges =
+                  await window.electron.ipcRenderer.invoke('checkAdminPrivileges')
 
                 if (!hasAdminPrivileges) {
                   const notification = new Notification(t('settings.autoStart.permissions'))
@@ -150,7 +155,7 @@ const GeneralConfig: React.FC = () => {
                   await disableAutoRun()
                 }
               } catch (e) {
-                alert(e)
+                toast.error(String(e))
               } finally {
                 mutateEnable()
               }
@@ -203,7 +208,7 @@ const GeneralConfig: React.FC = () => {
                 type="number"
                 value={autoQuitWithoutCoreDelay.toString()}
                 onValueChange={async (v: string) => {
-                  let num = parseInt(v)
+                  const num = parseInt(v)
                   await patchAppConfig({ autoQuitWithoutCoreDelay: num })
                 }}
                 onBlur={async (e) => {
@@ -247,7 +252,7 @@ const GeneralConfig: React.FC = () => {
                   envType: Array.from(v) as ('bash' | 'cmd' | 'powershell')[]
                 })
               } catch (e) {
-                alert(e)
+                toast.error(String(e))
               }
             }}
           >
@@ -283,10 +288,7 @@ const GeneralConfig: React.FC = () => {
                 }}
               />
             </SettingItem>
-            <SettingItem
-              title={t('settings.floatingWindowCompatMode')}
-              divider
-            >
+            <SettingItem title={t('settings.floatingWindowCompatMode')} divider>
               <div className="flex items-center gap-2">
                 <Switch
                   size="sm"
@@ -306,21 +308,35 @@ const GeneralConfig: React.FC = () => {
             </SettingItem>
           </>
         )}
-          <SettingItem title={t('settings.disableTray')} divider>
-            <Switch
-              size="sm"
-              isSelected={disableTray}
-              onValueChange={async (v) => {
-                await patchAppConfig({ disableTray: v })
-                if (v) {
+        <SettingItem title={t('settings.disableTray')} divider>
+          <Switch
+            size="sm"
+            isSelected={disableTray}
+            onValueChange={async (v) => {
+              await patchAppConfig({ disableTray: v })
+              if (v) {
+                closeTrayIcon()
+              } else {
+                showTrayIcon()
+              }
+            }}
+          />
+        </SettingItem>
+        {!disableTray && (
+          <>
+            <SettingItem title={t('settings.swapTrayClick')} divider>
+              <Switch
+                size="sm"
+                isSelected={swapTrayClick}
+                onValueChange={async (v) => {
+                  await patchAppConfig({ swapTrayClick: v })
                   closeTrayIcon()
-                } else {
-                  showTrayIcon()
-                }
-              }}
-            />
-          </SettingItem>
-          {!disableTray && (
+                  setTimeout(() => {
+                    showTrayIcon()
+                  }, 100)
+                }}
+              />
+            </SettingItem>
             <SettingItem title={t('settings.disableTrayIconColor')} divider>
               <Switch
                 size="sm"
@@ -331,7 +347,8 @@ const GeneralConfig: React.FC = () => {
                 }}
               />
             </SettingItem>
-          )}
+          </>
+        )}
         {platform !== 'linux' && (
           <>
             <SettingItem title={t('settings.proxyInTray')} divider>
@@ -344,15 +361,30 @@ const GeneralConfig: React.FC = () => {
               />
             </SettingItem>
             {proxyInTray && (
-              <SettingItem title={t('settings.showCurrentProxyInTray')} divider>
-                <Switch
-                  size="sm"
-                  isSelected={showCurrentProxyInTray}
-                  onValueChange={async (v) => {
-                    await patchAppConfig({ showCurrentProxyInTray: v })
-                  }}
-                />
-              </SettingItem>
+              <>
+                <SettingItem title={t('settings.showCurrentProxyInTray')} divider>
+                  <Switch
+                    size="sm"
+                    isSelected={showCurrentProxyInTray}
+                    onValueChange={async (v) => {
+                      await patchAppConfig({ showCurrentProxyInTray: v })
+                    }}
+                  />
+                </SettingItem>
+                <SettingItem title={t('settings.trayProxyGroupStyle')} divider>
+                  <Tabs
+                    size="sm"
+                    color="primary"
+                    selectedKey={trayProxyGroupStyle}
+                    onSelectionChange={(key) => {
+                      patchAppConfig({ trayProxyGroupStyle: key as 'default' | 'submenu' })
+                    }}
+                  >
+                    <Tab key="default" title={t('settings.trayProxyGroupStyleDefault')} />
+                    <Tab key="submenu" title={t('settings.trayProxyGroupStyleSubmenu')} />
+                  </Tabs>
+                </SettingItem>
+              </>
             )}
             <SettingItem
               title={t('settings.showTraffic', {
@@ -397,7 +429,7 @@ const GeneralConfig: React.FC = () => {
                 await patchAppConfig({ useWindowFrame: v })
                 await relaunchApp()
               } catch (e) {
-                alert(e)
+                toast.error(String(e))
                 setIsRelaunching(false)
               }
             }, 1000)}
@@ -487,7 +519,7 @@ const GeneralConfig: React.FC = () => {
                     await fetchThemes()
                     setCustomThemes(await resolveThemes())
                   } catch (e) {
-                    alert(e)
+                    toast.error(String(e))
                   } finally {
                     setFetching(false)
                   }
@@ -507,7 +539,7 @@ const GeneralConfig: React.FC = () => {
                     await importThemes(files)
                     setCustomThemes(await resolveThemes())
                   } catch (e) {
-                    alert(e)
+                    toast.error(String(e))
                   }
                 }}
               >
@@ -539,7 +571,7 @@ const GeneralConfig: React.FC = () => {
                 try {
                   await patchAppConfig({ customTheme: v.currentKey as string })
                 } catch (e) {
-                  alert(e)
+                  toast.error(String(e))
                 }
               }}
             >

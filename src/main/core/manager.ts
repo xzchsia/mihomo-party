@@ -13,7 +13,6 @@ import { generateProfile } from './factory'
 import {
   getAppConfig,
   getControledMihomoConfig,
-  getProfileConfig,
   patchAppConfig,
   patchControledMihomoConfig,
   manageSmartOverride
@@ -34,7 +33,7 @@ import {
 import chokidar from 'chokidar'
 import { readFile, rm, writeFile } from 'fs/promises'
 import { promisify } from 'util'
-import { mainWindow } from '..'
+import { mainWindow } from '../window'
 import path from 'path'
 import os from 'os'
 import { createWriteStream, existsSync } from 'fs'
@@ -46,15 +45,14 @@ import { managerLogger } from '../utils/logger'
 
 // 内核名称白名单
 const ALLOWED_CORES = ['mihomo', 'mihomo-alpha', 'mihomo-smart'] as const
-type AllowedCore = typeof ALLOWED_CORES[number]
+type AllowedCore = (typeof ALLOWED_CORES)[number]
 
 function isValidCoreName(core: string): core is AllowedCore {
   return ALLOWED_CORES.includes(core as AllowedCore)
 }
 
-  // 路径检查
+// 路径检查
 function validateCorePath(corePath: string): void {
-
   if (corePath.includes('..')) {
     throw new Error('Invalid core path: directory traversal detected')
   }
@@ -131,15 +129,15 @@ export async function startCore(detached = false): Promise<Promise<void>[]> {
       await rm(path.join(dataDir(), 'core.pid'))
     }
   }
-  const { current } = await getProfileConfig(true)
   const { tun } = await getControledMihomoConfig()
   const corePath = mihomoCorePath(core)
 
   // 管理 Smart 内核覆写配置
   await manageSmartOverride()
 
-  await generateProfile()
-  await checkProfile()
+  // generateProfile 返回实际使用的 current，确保内核工作目录与配置文件一致
+  const current = await generateProfile()
+  await checkProfile(current)
   await stopCore()
 
   await cleanupSocketFile()
@@ -163,7 +161,7 @@ export async function startCore(detached = false): Promise<Promise<void>[]> {
   // 内核日志输出到独立的 core-日期.log 文件
   const stdout = createWriteStream(coreLogPath(), { flags: 'a' })
   const stderr = createWriteStream(coreLogPath(), { flags: 'a' })
-  
+
   child = spawn(
     corePath,
     ['-d', diffWorkDir ? mihomoProfileWorkDir(current) : mihomoWorkDir(), ctlParam, dynamicIpcPath],
@@ -176,7 +174,9 @@ export async function startCore(detached = false): Promise<Promise<void>[]> {
     os.setPriority(child.pid, os.constants.priority[mihomoCpuPriority])
   }
   if (detached) {
-    await managerLogger.info(`Core process detached successfully on ${process.platform}, PID: ${child.pid}`)
+    await managerLogger.info(
+      `Core process detached successfully on ${process.platform}, PID: ${child.pid}`
+    )
     child.unref()
     return new Promise((resolve) => {
       resolve([new Promise(() => {})])
@@ -210,7 +210,8 @@ export async function startCore(detached = false): Promise<Promise<void>[]> {
         reject(i18next.t('tun.error.tunPermissionDenied'))
       }
 
-      if ((process.platform !== 'win32' && str.includes('External controller unix listen error')) ||
+      if (
+        (process.platform !== 'win32' && str.includes('External controller unix listen error')) ||
         (process.platform === 'win32' && str.includes('External controller pipe listen error'))
       ) {
         await managerLogger.error('External controller listen error detected:', str)
@@ -219,7 +220,7 @@ export async function startCore(detached = false): Promise<Promise<void>[]> {
           await managerLogger.info('Attempting Windows pipe cleanup and retry...')
           try {
             await cleanupWindowsNamedPipes()
-            await new Promise(resolve => setTimeout(resolve, 2000))
+            await new Promise((resolve) => setTimeout(resolve, 2000))
           } catch (cleanupError) {
             await managerLogger.error('Pipe cleanup failed:', cleanupError)
           }
@@ -235,7 +236,9 @@ export async function startCore(detached = false): Promise<Promise<void>[]> {
         resolve([
           new Promise((resolve) => {
             child.stdout?.on('data', async (data) => {
-              if (data.toString().toLowerCase().includes('start initial compatible provider default')) {
+              if (
+                data.toString().toLowerCase().includes('start initial compatible provider default')
+              ) {
                 try {
                   mainWindow?.webContents.send('groupsUpdated')
                   mainWindow?.webContents.send('rulesUpdated')
@@ -307,7 +310,7 @@ async function cleanupWindowsNamedPipes(): Promise<void> {
 
     try {
       const { stdout } = await execPromise(
-        `powershell -Command "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Get-Process | Where-Object {$_.ProcessName -like '*mihomo*'} | Select-Object Id,ProcessName | ConvertTo-Json"`,
+        `powershell -NoProfile -Command "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Get-Process | Where-Object {$_.ProcessName -like '*mihomo*'} | Select-Object Id,ProcessName | ConvertTo-Json"`,
         { encoding: 'utf8' }
       )
 
@@ -326,8 +329,8 @@ async function cleanupWindowsNamedPipes(): Promise<void> {
                 process.kill(pid, 0)
                 process.kill(pid, 'SIGTERM')
                 await managerLogger.info(`Terminated process ${pid} to free pipe`)
-              } catch (error: any) {
-                if (error.code !== 'ESRCH') {
+              } catch (error: unknown) {
+                if ((error as { code?: string })?.code !== 'ESRCH') {
                   await managerLogger.warn(`Failed to terminate process ${pid}:`, error)
                 }
               }
@@ -337,7 +340,7 @@ async function cleanupWindowsNamedPipes(): Promise<void> {
           await managerLogger.warn('Failed to parse process list JSON:', parseError)
 
           // 回退到文本解析
-          const lines = stdout.split('\n').filter(line => line.includes('mihomo'))
+          const lines = stdout.split('\n').filter((line) => line.includes('mihomo'))
           for (const line of lines) {
             const match = line.match(/(\d+)/)
             if (match) {
@@ -347,8 +350,8 @@ async function cleanupWindowsNamedPipes(): Promise<void> {
                   process.kill(pid, 0)
                   process.kill(pid, 'SIGTERM')
                   await managerLogger.info(`Terminated process ${pid} to free pipe`)
-                } catch (error: any) {
-                  if (error.code !== 'ESRCH') {
+                } catch (error: unknown) {
+                  if ((error as { code?: string })?.code !== 'ESRCH') {
                     await managerLogger.warn(`Failed to terminate process ${pid}:`, error)
                   }
                 }
@@ -361,8 +364,7 @@ async function cleanupWindowsNamedPipes(): Promise<void> {
       await managerLogger.warn('Failed to check mihomo processes:', error)
     }
 
-    await new Promise(resolve => setTimeout(resolve, 1000))
-
+    await new Promise((resolve) => setTimeout(resolve, 1000))
   } catch (error) {
     await managerLogger.error('Windows named pipe cleanup failed:', error)
   }
@@ -450,15 +452,11 @@ export async function quitWithoutCore(): Promise<void> {
   app.exit()
 }
 
-async function checkProfile(): Promise<void> {
-  const {
-    core = 'mihomo',
-    diffWorkDir = false
-  } = await getAppConfig()
-  const { current } = await getProfileConfig()
+async function checkProfile(current: string | undefined): Promise<void> {
+  const { core = 'mihomo', diffWorkDir = false } = await getAppConfig()
   const corePath = mihomoCorePath(core)
   const execFilePromise = promisify(execFile)
-  
+
   try {
     await execFilePromise(corePath, [
       '-t',
@@ -484,13 +482,15 @@ async function checkProfile(): Promise<void> {
           }
           return line.trim()
         })
-        .filter(line => line.length > 0)
+        .filter((line) => line.length > 0)
 
       if (errorLines.length === 0) {
-        const allLines = stdout.split('\n').filter(line => line.trim().length > 0)
+        const allLines = stdout.split('\n').filter((line) => line.trim().length > 0)
         throw new Error(`${i18next.t('mihomo.error.profileCheckFailed')}:\n${allLines.join('\n')}`)
       } else {
-        throw new Error(`${i18next.t('mihomo.error.profileCheckFailed')}:\n${errorLines.join('\n')}`)
+        throw new Error(
+          `${i18next.t('mihomo.error.profileCheckFailed')}:\n${errorLines.join('\n')}`
+        )
       }
     } else {
       throw new Error(`${i18next.t('mihomo.error.profileCheckFailed')}: ${error}`)
@@ -499,24 +499,7 @@ async function checkProfile(): Promise<void> {
 }
 
 export async function checkTunPermissions(): Promise<boolean> {
-  const { core = 'mihomo' } = await getAppConfig()
-  const corePath = mihomoCorePath(core)
-
-  try {
-    if (process.platform === 'win32') {
-      return await checkAdminPrivileges()
-    }
-
-    if (process.platform === 'darwin' || process.platform === 'linux') {
-      const { stat } = await import('fs/promises')
-      const stats = await stat(corePath)
-      return (stats.mode & 0o4000) !== 0 && stats.uid === 0
-    }
-  } catch {
-    return false
-  }
-
-  return false
+  return checkMihomoCorePermissions()
 }
 
 export async function grantTunPermissions(): Promise<void> {
@@ -577,7 +560,7 @@ async function waitForCoreReady(): Promise<void> {
       await axios.get('/')
       await managerLogger.info(`Core ready after ${i + 1} attempts (${(i + 1) * retryInterval}ms)`)
       return
-    } catch (error) {
+    } catch {
       if (i === 0) {
         await managerLogger.info('Waiting for core to be ready...')
       }
@@ -587,7 +570,7 @@ async function waitForCoreReady(): Promise<void> {
         return
       }
 
-      await new Promise(resolve => setTimeout(resolve, retryInterval))
+      await new Promise((resolve) => setTimeout(resolve, retryInterval))
     }
   }
 }
@@ -598,24 +581,26 @@ export async function checkAdminPrivileges(): Promise<boolean> {
   }
 
   const execPromise = promisify(exec)
-  
+
   try {
     // fltmc 检测管理员权限
     await execPromise('chcp 65001 >nul 2>&1 && fltmc', { encoding: 'utf8' })
     await managerLogger.info('Admin privileges confirmed via fltmc')
     return true
-  } catch (fltmcError: any) {
-    const errorCode = fltmcError?.code || 0
+  } catch (fltmcError: unknown) {
+    const errorCode = (fltmcError as { code?: number })?.code || 0
     await managerLogger.debug(`fltmc failed with code ${errorCode}, trying net session as fallback`)
-    
+
     try {
       // net session 备用
       await execPromise('chcp 65001 >nul 2>&1 && net session', { encoding: 'utf8' })
       await managerLogger.info('Admin privileges confirmed via net session')
       return true
-    } catch (netSessionError: any) {
-      const netErrorCode = netSessionError?.code || 0
-      await managerLogger.debug(`Both fltmc and net session failed, no admin privileges. Error codes: fltmc=${errorCode}, net=${netErrorCode}`)
+    } catch (netSessionError: unknown) {
+      const netErrorCode = (netSessionError as { code?: number })?.code || 0
+      await managerLogger.debug(
+        `Both fltmc and net session failed, no admin privileges. Error codes: fltmc=${errorCode}, net=${netErrorCode}`
+      )
       return false
     }
   }
@@ -630,11 +615,15 @@ export async function showTunPermissionDialog(): Promise<boolean> {
   await managerLogger.info(`i18next available: ${typeof i18next.t === 'function'}`)
 
   const title = i18next.t('tun.permissions.title') || '需要管理员权限'
-  const message = i18next.t('tun.permissions.message') || '启用TUN模式需要管理员权限，是否现在重启应用获取权限？'
+  const message =
+    i18next.t('tun.permissions.message') ||
+    '启用 TUN 模式需要管理员权限，是否现在重启应用获取权限？'
   const confirmText = i18next.t('common.confirm') || '确认'
   const cancelText = i18next.t('common.cancel') || '取消'
 
-  await managerLogger.info(`Dialog texts - Title: "${title}", Message: "${message}", Confirm: "${confirmText}", Cancel: "${cancelText}"`)
+  await managerLogger.info(
+    `Dialog texts - Title: "${title}", Message: "${message}", Confirm: "${confirmText}", Cancel: "${cancelText}"`
+  )
 
   const choice = dialog.showMessageBoxSync({
     type: 'warning',
@@ -678,18 +667,18 @@ export async function restartAsAdmin(forTun: boolean = true): Promise<void> {
   try {
     // 处理路径和参数的引号
     const escapedExePath = exePath.replace(/'/g, "''")
-    const argsString = restartArgs.map(arg => arg.replace(/'/g, "''")).join("', '")
+    const argsString = restartArgs.map((arg) => arg.replace(/'/g, "''")).join("', '")
 
     let command: string
     if (restartArgs.length > 0) {
-      command = `powershell -Command "Start-Process -FilePath '${escapedExePath}' -ArgumentList '${argsString}' -Verb RunAs"`
+      command = `powershell -NoProfile -Command "Start-Process -FilePath '${escapedExePath}' -ArgumentList '${argsString}' -Verb RunAs"`
     } else {
-      command = `powershell -Command "Start-Process -FilePath '${escapedExePath}' -Verb RunAs"`
+      command = `powershell -NoProfile -Command "Start-Process -FilePath '${escapedExePath}' -Verb RunAs"`
     }
 
     await managerLogger.info('Restarting as administrator with command', command)
 
-    // 执行PowerShell命令
+    // 执行 PowerShell 命令
     exec(command, { windowsHide: true }, async (error, _stdout, stderr) => {
       if (error) {
         await managerLogger.error('PowerShell execution error', error)
@@ -713,7 +702,7 @@ export async function checkMihomoCorePermissions(): Promise<boolean> {
 
   try {
     if (process.platform === 'win32') {
-      // Windows权限检查
+      // Windows 权限检查
       return await checkAdminPrivileges()
     }
 
@@ -776,8 +765,11 @@ async function checkHighPrivilegeMihomoProcess(): Promise<boolean> {
 
       for (const executable of mihomoExecutables) {
         try {
-          const { stdout } = await execPromise(`chcp 65001 >nul 2>&1 && tasklist /FI "IMAGENAME eq ${executable}" /FO CSV`, { encoding: 'utf8' })
-          const lines = stdout.split('\n').filter(line => line.includes(executable))
+          const { stdout } = await execPromise(
+            `chcp 65001 >nul 2>&1 && tasklist /FI "IMAGENAME eq ${executable}" /FO CSV`,
+            { encoding: 'utf8' }
+          )
+          const lines = stdout.split('\n').filter((line) => line.includes(executable))
 
           if (lines.length > 0) {
             await managerLogger.info(`Found ${lines.length} ${executable} processes running`)
@@ -797,8 +789,10 @@ async function checkHighPrivilegeMihomoProcess(): Promise<boolean> {
                   if (processJson.Name.includes('mihomo') && processJson.Path === null) {
                     return true
                   }
-                } catch (error) {
-                  await managerLogger.info(`Cannot get info for process ${pid}, might be high privilege`)
+                } catch {
+                  await managerLogger.info(
+                    `Cannot get info for process ${pid}, might be high privilege`
+                  )
                 }
               }
             }
@@ -819,7 +813,9 @@ async function checkHighPrivilegeMihomoProcess(): Promise<boolean> {
         for (const executable of mihomoExecutables) {
           try {
             const { stdout } = await execPromise(`ps aux | grep ${executable} | grep -v grep`)
-            const lines = stdout.split('\n').filter(line => line.trim() && line.includes(executable))
+            const lines = stdout
+              .split('\n')
+              .filter((line) => line.trim() && line.includes(executable))
 
             if (lines.length > 0) {
               foundProcesses = true
@@ -837,7 +833,8 @@ async function checkHighPrivilegeMihomoProcess(): Promise<boolean> {
                 }
               }
             }
-          } catch (error) {
+          } catch {
+            // ignore
           }
         }
 
@@ -855,7 +852,7 @@ async function checkHighPrivilegeMihomoProcess(): Promise<boolean> {
   return false
 }
 
-// TUN模式获取权限
+// TUN 模式获取权限
 export async function requestTunPermissions(): Promise<void> {
   if (process.platform === 'win32') {
     await restartAsAdmin()
@@ -898,7 +895,7 @@ export async function checkAdminRestartForTun(): Promise<void> {
       await managerLogger.error('Failed to auto-enable TUN after admin restart', error)
     }
   } else {
-    // 检查TUN配置与权限的匹配，但不自动开启 TUN
+    // 检查 TUN 配置与权限的匹配，但不自动开启 TUN
     await validateTunPermissionsOnStartup()
   }
 }
@@ -980,7 +977,10 @@ async function getOriginDNS(): Promise<void> {
 async function setDNS(dns: string): Promise<void> {
   const service = await getDefaultService()
   const execPromise = promisify(exec)
-  await execPromise(`networksetup -setdnsservers "${service}" ${dns}`)
+  // networksetup 需要 root 权限，通过 osascript 请求管理员权限执行
+  const shell = `networksetup -setdnsservers "${service}" ${dns}`
+  const command = `do shell script "${shell}" with administrator privileges`
+  await execPromise(`osascript -e '${command}'`)
 }
 
 async function setPublicDNS(): Promise<void> {

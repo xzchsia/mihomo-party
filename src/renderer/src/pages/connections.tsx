@@ -1,6 +1,6 @@
 import BasePage from '@renderer/components/base/base-page'
 import { mihomoCloseAllConnections, mihomoCloseConnection } from '@renderer/utils/ipc'
-import { Key, useCallback, useEffect, useMemo, useState } from 'react'
+import { Key, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Badge, Button, Divider, Input, Select, SelectItem, Tab, Tabs } from '@heroui/react'
 import { calcTraffic } from '@renderer/utils/calc'
 import ConnectionItem from '@renderer/components/connections/connection-item'
@@ -15,7 +15,8 @@ import { MdViewList, MdTableChart } from 'react-icons/md'
 import { HiOutlineAdjustmentsHorizontal } from 'react-icons/hi2'
 import { Dropdown, DropdownTrigger, DropdownMenu, DropdownItem } from '@heroui/react'
 import { includesIgnoreCase } from '@renderer/utils/includes'
-import { differenceWith, unionWith } from 'lodash'
+import differenceWith from 'lodash/differenceWith'
+import unionWith from 'lodash/unionWith'
 import { useTranslation } from 'react-i18next'
 import { IoMdPause, IoMdPlay } from 'react-icons/io'
 
@@ -30,8 +31,18 @@ const Connections: React.FC = () => {
     connectionOrderBy = 'time',
     connectionViewMode = 'list',
     connectionTableColumns = [
-      'status', 'establishTime', 'type', 'host', 'process', 'rule',
-      'proxyChain', 'remoteDestination', 'uploadSpeed', 'downloadSpeed', 'upload', 'download'
+      'status',
+      'establishTime',
+      'type',
+      'host',
+      'process',
+      'rule',
+      'proxyChain',
+      'remoteDestination',
+      'uploadSpeed',
+      'downloadSpeed',
+      'upload',
+      'download'
     ],
     connectionTableColumnWidths,
     connectionTableSortColumn,
@@ -48,26 +59,49 @@ const Connections: React.FC = () => {
   const [viewMode, setViewMode] = useState<'list' | 'table'>(connectionViewMode)
   const [visibleColumns, setVisibleColumns] = useState<Set<string>>(new Set(connectionTableColumns))
 
-  const handleColumnWidthChange = useCallback(async (widths: Record<string, number>) => {
-    await patchAppConfig({ connectionTableColumnWidths: widths })
-  }, [patchAppConfig])
+  const activeConnectionsRef = useRef(activeConnections)
+  const allConnectionsRef = useRef(allConnections)
+  useEffect(() => {
+    activeConnectionsRef.current = activeConnections
+    allConnectionsRef.current = allConnections
+  }, [activeConnections, allConnections])
 
-  const handleSortChange = useCallback(async (column: string | null, direction: 'asc' | 'desc') => {
-    await patchAppConfig({
-      connectionTableSortColumn: column || undefined,
-      connectionTableSortDirection: direction
-    })
-  }, [patchAppConfig])
+  const selectedConnection = useMemo(() => {
+    if (!selected) return undefined
+    return (
+      activeConnections.find((c) => c.id === selected.id) ||
+      closedConnections.find((c) => c.id === selected.id) ||
+      selected
+    )
+  }, [selected, activeConnections, closedConnections])
+
+  const handleColumnWidthChange = useCallback(
+    async (widths: Record<string, number>) => {
+      await patchAppConfig({ connectionTableColumnWidths: widths })
+    },
+    [patchAppConfig]
+  )
+
+  const handleSortChange = useCallback(
+    async (column: string | null, direction: 'asc' | 'desc') => {
+      await patchAppConfig({
+        connectionTableSortColumn: column || undefined,
+        connectionTableSortDirection: direction
+      })
+    },
+    [patchAppConfig]
+  )
 
   const filteredConnections = useMemo(() => {
     const connections = tab === 'active' ? activeConnections : closedConnections
 
-    const filtered = filter === ''
-      ? connections
-      : connections.filter((connection) => {
-          const raw = JSON.stringify(connection)
-          return includesIgnoreCase(raw, filter)
-        })
+    const filtered =
+      filter === ''
+        ? connections
+        : connections.filter((connection) => {
+            const raw = JSON.stringify(connection)
+            return includesIgnoreCase(raw, filter)
+          })
 
     if (viewMode === 'list' && connectionOrderBy) {
       return [...filtered].sort((a, b) => {
@@ -94,75 +128,96 @@ const Connections: React.FC = () => {
     }
 
     return filtered
-  }, [activeConnections, closedConnections, tab, filter, connectionDirection, connectionOrderBy, viewMode])
+  }, [
+    activeConnections,
+    closedConnections,
+    tab,
+    filter,
+    connectionDirection,
+    connectionOrderBy,
+    viewMode
+  ])
 
   const closeAllConnections = useCallback((): void => {
     tab === 'active' ? mihomoCloseAllConnections() : trashAllClosedConnection()
-  }, [tab, closedConnections])
-
-  const closeConnection = useCallback((id: string): void => {
-    tab === 'active' ? mihomoCloseConnection(id) : trashClosedConnection(id)
   }, [tab])
 
-  const trashAllClosedConnection = (): void => {
-    const trashIds = closedConnections.map((conn) => conn.id)
-    setAllConnections((allConns) => allConns.filter((conn) => !trashIds.includes(conn.id)))
-    setClosedConnections([])
+  const closeConnection = useCallback(
+    (id: string): void => {
+      tab === 'active' ? mihomoCloseConnection(id) : trashClosedConnection(id)
+    },
+    [tab]
+  )
 
-    cachedConnections = allConnections
+  const trashAllClosedConnection = (): void => {
+    setClosedConnections((closedConns) => {
+      const trashIds = new Set(closedConns.map((conn) => conn.id))
+      setAllConnections((allConns) => {
+        const filtered = allConns.filter((conn) => !trashIds.has(conn.id))
+        cachedConnections = filtered
+        return filtered
+      })
+      return []
+    })
   }
 
   const trashClosedConnection = (id: string): void => {
-    setAllConnections((allConns) => allConns.filter((conn) => conn.id != id))
-    setClosedConnections((closedConns) => closedConns.filter((conn) => conn.id != id))
-
-    cachedConnections = allConnections
+    setAllConnections((allConns) => {
+      const filtered = allConns.filter((conn) => conn.id !== id)
+      cachedConnections = filtered
+      return filtered
+    })
+    setClosedConnections((closedConns) => closedConns.filter((conn) => conn.id !== id))
   }
 
   useEffect(() => {
-    if (isPaused) return
-    window.electron.ipcRenderer.on('mihomoConnections', (_e, info: IMihomoConnectionsInfo) => {
+    const handler = (_e: unknown, ...args: unknown[]): void => {
+      const info = args[0] as IMihomoConnectionsInfo
       setConnectionsInfo(info)
 
       if (!info.connections) return
-      const allConns = unionWith(activeConnections, allConnections, (a, b) => a.id === b.id)
+      const allConns = unionWith(
+        activeConnectionsRef.current,
+        allConnectionsRef.current,
+        (a, b) => a.id === b.id
+      )
 
+      const prevConnMap = new Map(activeConnectionsRef.current.map((c) => [c.id, c]))
       const activeConns = info.connections.map((conn) => {
-        const preConn = activeConnections.find((c) => c.id === conn.id)
-        const downloadSpeed = preConn ? conn.download - preConn.download : 0
-        const uploadSpeed = preConn ? conn.upload - preConn.upload : 0
+        const preConn = prevConnMap.get(conn.id)
         return {
           ...conn,
           isActive: true,
-          downloadSpeed: downloadSpeed,
-          uploadSpeed: uploadSpeed
+          downloadSpeed: preConn ? conn.download - preConn.download : 0,
+          uploadSpeed: preConn ? conn.upload - preConn.upload : 0
         }
       })
       const closedConns = differenceWith(allConns, activeConns, (a, b) => a.id === b.id).map(
-        (conn) => {
-          return {
-            ...conn,
-            isActive: false,
-            downloadSpeed: 0,
-            uploadSpeed: 0
-          }
-        }
+        (conn) => ({
+          ...conn,
+          isActive: false,
+          downloadSpeed: 0,
+          uploadSpeed: 0
+        })
       )
 
       setActiveConnections(activeConns)
       setClosedConnections(closedConns)
       setAllConnections(allConns.slice(-(activeConns.length + 200)))
+      cachedConnections = allConns
+    }
 
-      cachedConnections = allConnections
-    })
+    if (!isPaused) {
+      window.electron.ipcRenderer.on('mihomoConnections', handler)
+    }
 
     return (): void => {
       window.electron.ipcRenderer.removeAllListeners('mihomoConnections')
     }
-  }, [allConnections, activeConnections, closedConnections, isPaused])
-  const togglePause = () => {
-    setIsPaused(!isPaused)
-  }
+  }, [isPaused])
+  const togglePause = useCallback(() => {
+    setIsPaused((prev) => !prev)
+  }, [])
 
   return (
     <BasePage
@@ -182,11 +237,15 @@ const Connections: React.FC = () => {
             color="primary"
             variant="flat"
             showOutline={false}
-            content={`${filteredConnections.length}`}
+            content={filteredConnections.length}
           >
             <Button
               className="app-nodrag ml-1"
-              title={viewMode === 'list' ? t('connections.table.switchToTable') : t('connections.table.switchToList')}
+              title={
+                viewMode === 'list'
+                  ? t('connections.table.switchToTable')
+                  : t('connections.table.switchToList')
+              }
               isIconOnly
               size="sm"
               variant="light"
@@ -196,7 +255,11 @@ const Connections: React.FC = () => {
                 await patchAppConfig({ connectionViewMode: newMode })
               }}
             >
-              {viewMode === 'list' ? <MdTableChart className="text-lg" /> : <MdViewList className="text-lg" />}
+              {viewMode === 'list' ? (
+                <MdTableChart className="text-lg" />
+              ) : (
+                <MdViewList className="text-lg" />
+              )}
             </Button>
             <Button
               className="app-nodrag ml-1"
@@ -230,14 +293,17 @@ const Connections: React.FC = () => {
         </div>
       }
     >
-      {isDetailModalOpen && selected && (
-        <ConnectionDetailModal onClose={() => setIsDetailModalOpen(false)} connection={selected} />
+      {isDetailModalOpen && selectedConnection && (
+        <ConnectionDetailModal
+          onClose={() => setIsDetailModalOpen(false)}
+          connection={selectedConnection}
+        />
       )}
       <div className="overflow-x-auto sticky top-0 z-40">
         <div className="flex p-2 gap-2">
           <Tabs
             size="sm"
-            color={`${tab === 'active' ? 'primary' : 'danger'}`}
+            color={tab === 'active' ? 'primary' : 'danger'}
             selectedKey={tab}
             variant="underlined"
             className="w-fit h-[32px]"
@@ -249,7 +315,7 @@ const Connections: React.FC = () => {
               key="active"
               title={
                 <Badge
-                  color={`${tab === 'active' ? 'primary' : 'default'}`}
+                  color={tab === 'active' ? 'primary' : 'default'}
                   size="sm"
                   shape="circle"
                   variant="flat"
@@ -264,7 +330,7 @@ const Connections: React.FC = () => {
               key="closed"
               title={
                 <Badge
-                  color={`${tab === 'closed' ? 'danger' : 'default'}`}
+                  color={tab === 'closed' ? 'danger' : 'default'}
                   size="sm"
                   shape="circle"
                   variant="flat"
@@ -308,7 +374,9 @@ const Connections: React.FC = () => {
                 }}
               >
                 <DropdownItem key="status">{t('connections.detail.status')}</DropdownItem>
-                <DropdownItem key="establishTime">{t('connections.detail.establishTime')}</DropdownItem>
+                <DropdownItem key="establishTime">
+                  {t('connections.detail.establishTime')}
+                </DropdownItem>
                 <DropdownItem key="type">{t('connections.detail.connectionType')}</DropdownItem>
                 <DropdownItem key="host">{t('connections.detail.host')}</DropdownItem>
                 <DropdownItem key="sniffHost">{t('connections.detail.sniffHost')}</DropdownItem>
@@ -318,7 +386,9 @@ const Connections: React.FC = () => {
                 <DropdownItem key="proxyChain">{t('connections.detail.proxyChain')}</DropdownItem>
                 <DropdownItem key="sourceIP">{t('connections.detail.sourceIP')}</DropdownItem>
                 <DropdownItem key="sourcePort">{t('connections.detail.sourcePort')}</DropdownItem>
-                <DropdownItem key="destinationPort">{t('connections.detail.destinationPort')}</DropdownItem>
+                <DropdownItem key="destinationPort">
+                  {t('connections.detail.destinationPort')}
+                </DropdownItem>
                 <DropdownItem key="inboundIP">{t('connections.detail.inboundIP')}</DropdownItem>
                 <DropdownItem key="inboundPort">{t('connections.detail.inboundPort')}</DropdownItem>
                 <DropdownItem key="uploadSpeed">{t('connections.uploadSpeed')}</DropdownItem>
@@ -326,7 +396,9 @@ const Connections: React.FC = () => {
                 <DropdownItem key="upload">{t('connections.uploadAmount')}</DropdownItem>
                 <DropdownItem key="download">{t('connections.downloadAmount')}</DropdownItem>
                 <DropdownItem key="dscp">{t('connections.detail.dscp')}</DropdownItem>
-                <DropdownItem key="remoteDestination">{t('connections.detail.remoteDestination')}</DropdownItem>
+                <DropdownItem key="remoteDestination">
+                  {t('connections.detail.remoteDestination')}
+                </DropdownItem>
                 <DropdownItem key="dnsMode">{t('connections.detail.dnsMode')}</DropdownItem>
               </DropdownMenu>
             </Dropdown>
@@ -339,7 +411,7 @@ const Connections: React.FC = () => {
                 size="sm"
                 className="w-[180px] min-w-[131px]"
                 aria-label={t('connections.orderBy')}
-                selectedKeys={new Set([connectionOrderBy])}
+                selectedKeys={[connectionOrderBy]}
                 disallowEmptySelection={true}
                 onSelectionChange={async (v) => {
                   await patchAppConfig({
@@ -362,7 +434,7 @@ const Connections: React.FC = () => {
                 size="sm"
                 isIconOnly
                 className="bg-content2"
-                onPress={async () => {
+                onPress={() => {
                   patchAppConfig({
                     connectionDirection: connectionDirection === 'asc' ? 'desc' : 'asc'
                   })
@@ -387,7 +459,6 @@ const Connections: React.FC = () => {
               <ConnectionItem
                 setSelected={setSelected}
                 setIsDetailModalOpen={setIsDetailModalOpen}
-                selected={selected}
                 close={closeConnection}
                 index={i}
                 key={connection.id}

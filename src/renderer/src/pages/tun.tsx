@@ -1,5 +1,6 @@
 import { Button, Input, Switch, Tab, Tabs } from '@heroui/react'
 import BasePage from '@renderer/components/base/base-page'
+import { showErrorSync } from '@renderer/utils/error-display'
 import SettingCard from '@renderer/components/base/base-setting-card'
 import SettingItem from '@renderer/components/base/base-setting-item'
 import { useControledMihomoConfig } from '@renderer/hooks/use-controled-mihomo-config'
@@ -112,7 +113,7 @@ const Tun: React.FC = () => {
                     new Notification(t('tun.notifications.firewallResetSuccess'))
                     await restartCore()
                   } catch (e) {
-                    alert(e)
+                    showErrorSync(e, t('common.error.firewallSetupFailed'))
                   } finally {
                     setLoading(false)
                   }
@@ -133,7 +134,7 @@ const Tun: React.FC = () => {
                     new Notification(t('tun.notifications.coreAuthSuccess'))
                     await restartCore()
                   } catch (e) {
-                    alert(e)
+                    showErrorSync(e, t('common.error.coreAuthFailed'))
                   }
                 }}
               >
@@ -222,7 +223,8 @@ const Tun: React.FC = () => {
               className="w-[100px]"
               value={values.mtu.toString()}
               onValueChange={(v) => {
-                setValues({ ...values, mtu: parseInt(v) })
+                const num = parseInt(v)
+                setValues({ ...values, mtu: isNaN(num) ? 1500 : num })
               }}
             />
           </SettingItem>

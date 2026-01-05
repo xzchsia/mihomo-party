@@ -15,12 +15,25 @@ import pngIconBlue from '../../../resources/icon_blue.png?asset'
 import pngIconRed from '../../../resources/icon_red.png?asset'
 import pngIconGreen from '../../../resources/icon_green.png?asset'
 import templateIcon from '../../../resources/iconTemplate.png?asset'
-import { mihomoChangeProxy, mihomoCloseAllConnections, mihomoGroups, patchMihomoConfig, getTrayIconStatus, calculateTrayIconStatus } from '../core/mihomoApi'
-import { mainWindow, showMainWindow, triggerMainWindow } from '..'
+import {
+  mihomoChangeProxy,
+  mihomoCloseAllConnections,
+  mihomoGroups,
+  patchMihomoConfig,
+  getTrayIconStatus,
+  calculateTrayIconStatus
+} from '../core/mihomoApi'
+import { mainWindow, showMainWindow, triggerMainWindow } from '../window'
 import { app, clipboard, ipcMain, Menu, nativeImage, shell, Tray } from 'electron'
 import { dataDir, logDir, mihomoCoreDir, mihomoWorkDir } from '../utils/dirs'
 import { triggerSysProxy } from '../sys/sysproxy'
-import { quitWithoutCore, restartCore, checkMihomoCorePermissions, requestTunPermissions, restartAsAdmin } from '../core/manager'
+import {
+  quitWithoutCore,
+  restartCore,
+  checkMihomoCorePermissions,
+  requestTunPermissions,
+  restartAsAdmin
+} from '../core/manager'
 import { floatingWindow, triggerFloatingWindow } from './floatingWindow'
 import { t } from 'i18next'
 import { trayLogger } from '../utils/logger'
@@ -30,8 +43,14 @@ export let tray: Tray | null = null
 export const buildContextMenu = async (): Promise<Menu> => {
   // 添加调试日志
   await trayLogger.debug('Current translation for tray.showWindow', t('tray.showWindow'))
-  await trayLogger.debug('Current translation for tray.hideFloatingWindow', t('tray.hideFloatingWindow'))
-  await trayLogger.debug('Current translation for tray.showFloatingWindow', t('tray.showFloatingWindow'))
+  await trayLogger.debug(
+    'Current translation for tray.hideFloatingWindow',
+    t('tray.hideFloatingWindow')
+  )
+  await trayLogger.debug(
+    'Current translation for tray.showFloatingWindow',
+    t('tray.showFloatingWindow')
+  )
 
   const { mode, tun } = await getControledMihomoConfig()
   const {
@@ -40,6 +59,7 @@ export const buildContextMenu = async (): Promise<Menu> => {
     autoCloseConnection,
     proxyInTray = true,
     showCurrentProxyInTray = false,
+    trayProxyGroupStyle = 'default',
     triggerSysProxyShortcut = '',
     showFloatingWindowShortcut = '',
     showWindowShortcut = '',
@@ -54,13 +74,13 @@ export const buildContextMenu = async (): Promise<Menu> => {
   if (proxyInTray && process.platform !== 'linux') {
     try {
       const groups = await mihomoGroups()
-      groupsMenu = groups.map((group) => {
-        const groupLabel = showCurrentProxyInTray ? `${group.name} | ${group.now}` : group.name;
-        
+      const groupItems: Electron.MenuItemConstructorOptions[] = groups.map((group) => {
+        const groupLabel = showCurrentProxyInTray ? `${group.name} | ${group.now}` : group.name
+
         return {
           id: group.name,
           label: groupLabel,
-          type: 'submenu',
+          type: 'submenu' as const,
           submenu: group.all.map((proxy) => {
             const delay = proxy.history.length ? proxy.history[proxy.history.length - 1].delay : -1
             let displayDelay = `(${delay}ms)`
@@ -73,7 +93,7 @@ export const buildContextMenu = async (): Promise<Menu> => {
             return {
               id: proxy.name,
               label: `${proxy.name}   ${displayDelay}`,
-              type: 'radio',
+              type: 'radio' as const,
               checked: proxy.name === group.now,
               click: async (): Promise<void> => {
                 await mihomoChangeProxy(group.name, proxy.name)
@@ -85,8 +105,22 @@ export const buildContextMenu = async (): Promise<Menu> => {
           })
         }
       })
-      groupsMenu.unshift({ type: 'separator' })
-    } catch (e) {
+
+      if (trayProxyGroupStyle === 'submenu') {
+        groupsMenu = [
+          { type: 'separator' },
+          {
+            id: 'proxy-groups',
+            label: t('tray.proxyGroups'),
+            type: 'submenu',
+            submenu: groupItems
+          }
+        ]
+      } else {
+        groupsMenu = groupItems
+        groupsMenu.unshift({ type: 'separator' })
+      }
+    } catch {
       // ignore
       // 避免出错时无法创建托盘菜单
     }
@@ -106,7 +140,9 @@ export const buildContextMenu = async (): Promise<Menu> => {
     {
       id: 'show-floating',
       accelerator: showFloatingWindowShortcut,
-      label: floatingWindow?.isVisible() ? t('tray.hideFloatingWindow') : t('tray.showFloatingWindow'),
+      label: floatingWindow?.isVisible()
+        ? t('tray.hideFloatingWindow')
+        : t('tray.showFloatingWindow'),
       type: 'normal',
       click: async (): Promise<void> => {
         await triggerFloatingWindow()
@@ -170,7 +206,7 @@ export const buildContextMenu = async (): Promise<Menu> => {
           await patchAppConfig({ sysProxy: { enable } })
           mainWindow?.webContents.send('appConfigUpdated')
           floatingWindow?.webContents.send('appConfigUpdated')
-        } catch (e) {
+        } catch {
           // ignore
         } finally {
           ipcMain.emit('updateTrayMenu')
@@ -331,7 +367,7 @@ export const buildContextMenu = async (): Promise<Menu> => {
 }
 
 export async function createTray(): Promise<void> {
-  const { useDockIcon = true } = await getAppConfig()
+  const { useDockIcon = true, swapTrayClick = false } = await getAppConfig()
   if (process.platform === 'linux') {
     tray = new Tray(pngIcon)
     const menu = await buildContextMenu()
@@ -354,30 +390,55 @@ export async function createTray(): Promise<void> {
     if (!useDockIcon) {
       hideDockIcon()
     }
+    // 移除旧监听器防止累积
+    ipcMain.removeAllListeners('trayIconUpdate')
     ipcMain.on('trayIconUpdate', async (_, png: string) => {
       const image = nativeImage.createFromDataURL(png).resize({ height: 16 })
       image.setTemplateImage(true)
       tray?.setImage(image)
     })
+    // macOS 默认行为：左键显示窗口，右键显示菜单
     tray?.addListener('click', async () => {
-      triggerMainWindow()
+      if (swapTrayClick) {
+        await updateTrayMenu()
+      } else {
+        triggerMainWindow()
+      }
     })
     tray?.addListener('right-click', async () => {
-      await updateTrayMenu()
+      if (swapTrayClick) {
+        triggerMainWindow()
+      } else {
+        await updateTrayMenu()
+      }
     })
   }
   if (process.platform === 'win32') {
-    tray?.addListener('click', () => {
-      triggerMainWindow()
+    tray?.addListener('click', async () => {
+      if (swapTrayClick) {
+        await updateTrayMenu()
+      } else {
+        triggerMainWindow()
+      }
     })
     tray?.addListener('right-click', async () => {
-      await updateTrayMenu()
+      if (swapTrayClick) {
+        triggerMainWindow()
+      } else {
+        await updateTrayMenu()
+      }
     })
   }
   if (process.platform === 'linux') {
-    tray?.addListener('click', () => {
-      triggerMainWindow()
+    tray?.addListener('click', async () => {
+      if (swapTrayClick) {
+        await updateTrayMenu()
+      } else {
+        triggerMainWindow()
+      }
     })
+    // 移除旧监听器防止累积
+    ipcMain.removeAllListeners('updateTrayMenu')
     ipcMain.on('updateTrayMenu', async () => {
       await updateTrayMenu()
     })
@@ -466,7 +527,7 @@ export function updateTrayIconImmediate(sysProxyEnabled: boolean, tunEnabled: bo
 
   const status = calculateTrayIconStatus(sysProxyEnabled, tunEnabled)
   const iconPaths = getIconPaths()
-  
+
   getAppConfig().then(({ disableTrayIconColor = false }) => {
     if (!tray) return
     const iconPath = disableTrayIconColor ? iconPaths.white : iconPaths[status]
@@ -479,8 +540,8 @@ export function updateTrayIconImmediate(sysProxyEnabled: boolean, tunEnabled: bo
       } else if (process.platform === 'linux') {
         tray.setImage(iconPath)
       }
-    } catch (error) {
-      console.error('更新托盘图标失败:', error)
+    } catch {
+      // Failed to update tray icon
     }
   })
 }
@@ -502,7 +563,7 @@ export async function updateTrayIcon(): Promise<void> {
     } else if (process.platform === 'linux') {
       tray.setImage(iconPath)
     }
-  } catch (error) {
-    console.error('更新托盘图标失败:', error)
+  } catch {
+    // Failed to update tray icon
   }
 }

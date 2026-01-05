@@ -1,4 +1,6 @@
 import React, { createContext, ReactNode, useContext } from 'react'
+import { useTranslation } from 'react-i18next'
+import { showError } from '@renderer/utils/error-display'
 import useSWR from 'swr'
 import {
   addProfileItem as add,
@@ -22,6 +24,7 @@ interface ProfileConfigContextType {
 const ProfileConfigContext = createContext<ProfileConfigContextType | undefined>(undefined)
 
 export const ProfileConfigProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const { t } = useTranslation()
   const { data: profileConfig, mutate: mutateProfileConfig } = useSWR('getProfileConfig', () =>
     getProfileConfig()
   )
@@ -32,7 +35,7 @@ export const ProfileConfigProvider: React.FC<{ children: ReactNode }> = ({ child
     try {
       await set(config)
     } catch (e) {
-      alert(e)
+      await showError(e, t('common.error.saveProfileConfigFailed'))
     } finally {
       mutateProfileConfig()
       window.electron.ipcRenderer.send('updateTrayMenu')
@@ -43,7 +46,7 @@ export const ProfileConfigProvider: React.FC<{ children: ReactNode }> = ({ child
     try {
       await add(item)
     } catch (e) {
-      alert(e)
+      await showError(e, t('common.error.addProfileFailed'))
     } finally {
       mutateProfileConfig()
       window.electron.ipcRenderer.send('updateTrayMenu')
@@ -54,7 +57,7 @@ export const ProfileConfigProvider: React.FC<{ children: ReactNode }> = ({ child
     try {
       await remove(id)
     } catch (e) {
-      alert(e)
+      await showError(e, t('common.error.deleteProfileFailed'))
     } finally {
       mutateProfileConfig()
       window.electron.ipcRenderer.send('updateTrayMenu')
@@ -65,7 +68,7 @@ export const ProfileConfigProvider: React.FC<{ children: ReactNode }> = ({ child
     try {
       await update(item)
     } catch (e) {
-      alert(e)
+      await showError(e, t('common.error.updateProfileFailed'))
     } finally {
       mutateProfileConfig()
       window.electron.ipcRenderer.send('updateTrayMenu')
@@ -102,12 +105,12 @@ export const ProfileConfigProvider: React.FC<{ children: ReactNode }> = ({ child
         // 异步执行后台切换，不阻塞 UI
         await pendingTask.current
       } catch (e) {
-        const errorMsg = (e as any)?.message || String(e)
+        const errorMsg = (e as { message?: string })?.message || String(e)
         // 处理 IPC 超时错误
         if (errorMsg.includes('reply was never sent')) {
           setTimeout(() => mutateProfileConfig(), 1000)
         } else {
-          alert(`切换 Profile 失败: ${errorMsg}`)
+          await showError(errorMsg, t('common.error.switchProfileFailed'))
           mutateProfileConfig()
         }
       } finally {
@@ -117,11 +120,14 @@ export const ProfileConfigProvider: React.FC<{ children: ReactNode }> = ({ child
   }
 
   React.useEffect(() => {
-    window.electron.ipcRenderer.on('profileConfigUpdated', () => {
+    const handler = (): void => {
       mutateProfileConfig()
-    })
+    }
+    window.electron.ipcRenderer.on('profileConfigUpdated', handler)
     return (): void => {
-      window.electron.ipcRenderer.removeAllListeners('profileConfigUpdated')
+      // 清理待处理任务，防止内存泄漏
+      targetProfileId.current = null
+      window.electron.ipcRenderer.removeListener('profileConfigUpdated', handler)
     }
   }, [])
 

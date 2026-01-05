@@ -13,6 +13,7 @@ import {
   DropdownMenu,
   DropdownItem
 } from '@heroui/react'
+import { toast } from '@renderer/components/base/toast'
 import React, { useState } from 'react'
 import SettingItem from '../base/base-setting-item'
 import { useOverrideConfig } from '@renderer/hooks/use-override-config'
@@ -20,7 +21,7 @@ import { restartCore, addProfileUpdater } from '@renderer/utils/ipc'
 import { MdDeleteForever } from 'react-icons/md'
 import { FaPlus } from 'react-icons/fa6'
 import { useTranslation } from 'react-i18next'
-import { isValidCron } from 'cron-validator';
+import { isValidCron } from 'cron-validator'
 
 interface Props {
   item: IProfileItem
@@ -43,13 +44,13 @@ const EditInfoModal: React.FC<Props> = (props) => {
           (i) =>
             overrideItems.find((t) => t.id === i) && !overrideItems.find((t) => t.id === i)?.global
         )
-      };
+      }
       await updateProfileItem(updatedItem)
       await addProfileUpdater(updatedItem)
       await restartCore()
       onClose()
     } catch (e) {
-      alert(e)
+      toast.error(String(e))
     }
   }
 
@@ -91,6 +92,18 @@ const EditInfoModal: React.FC<Props> = (props) => {
                   }}
                 />
               </SettingItem>
+              <SettingItem title={t('profiles.editInfo.authToken')}>
+                <Input
+                  size="sm"
+                  type="password"
+                  className={cn(inputWidth)}
+                  value={values.authToken || ''}
+                  onValueChange={(v) => {
+                    setValues({ ...values, authToken: v })
+                  }}
+                  placeholder={t('profiles.editInfo.authTokenPlaceholder')}
+                />
+              </SettingItem>
               <SettingItem title={t('profiles.editInfo.useProxy')}>
                 <Switch
                   size="sm"
@@ -100,68 +113,83 @@ const EditInfoModal: React.FC<Props> = (props) => {
                   }}
                 />
               </SettingItem>
-              <SettingItem title={t('profiles.editInfo.interval')}>
-                <div className="flex flex-col gap-2">
-                  <Input
-                    size="sm"
-                    type="text"
-                    className={cn(
-                      inputWidth,
-                      // 不合法
-                      typeof values.interval === 'string' && 
-                      !/^\d+$/.test(values.interval) && 
-                      !isValidCron(values.interval, { seconds: false }) && 
-                      'border-red-500'
-                    )}
-                    value={values.interval?.toString() ?? ''}
-                    onValueChange={(v) => {
-                      // 输入限制
-                      if (/^[\d\s*\-,\/]*$/.test(v)) {
-                        // 纯数字
-                        if (/^\d+$/.test(v)) {
-                          setValues({ ...values, interval: parseInt(v, 10) || 0 });
-                          return;
-                        }
-                        // 非纯数字
-                        try {
-                          setValues({ ...values, interval: v });
-                        } catch (e) {
-                          // ignore
-                        }
-                      }
-                    }}
-                    placeholder={t('profiles.editInfo.intervalPlaceholder')}
-                  />
-
-                  {/* 动态提示信息 */}
-                  <div className="text-xs" style={{
-                    color: typeof values.interval === 'string' && 
-                          !/^\d+$/.test(values.interval) &&
-                          !isValidCron(values.interval, { seconds: false }) 
-                          ? '#ef4444'
-                          : '#6b7280'
-                  }}>
-                    {typeof values.interval === 'number' ? (
-                      t('profiles.editInfo.intervalMinutes')
-                    ) : /^\d+$/.test(values.interval?.toString() || '') ? (
-                      t('profiles.editInfo.intervalMinutes')
-                    ) : isValidCron(values.interval?.toString() || '', { seconds: false }) ? (
-                      t('profiles.editInfo.intervalCron')
-                    ) : (
-                      t('profiles.editInfo.intervalHint')
-                    )}
-                  </div>
-                </div>
-              </SettingItem>
-              <SettingItem title={t('profiles.editInfo.fixedInterval')}>
+              <SettingItem title={t('profiles.editInfo.autoUpdate')}>
                 <Switch
                   size="sm"
-                  isSelected={values.allowFixedInterval ?? false}
+                  isSelected={values.autoUpdate ?? false}
                   onValueChange={(v) => {
-                    setValues({ ...values, allowFixedInterval: v })
+                    setValues({ ...values, autoUpdate: v })
                   }}
                 />
               </SettingItem>
+              {values.autoUpdate && (
+                <>
+                  <SettingItem title={t('profiles.editInfo.interval')}>
+                    <div className="flex flex-col gap-2">
+                      <Input
+                        size="sm"
+                        type="text"
+                        className={cn(
+                          inputWidth,
+                          // 不合法
+                          typeof values.interval === 'string' &&
+                            !/^\d+$/.test(values.interval) &&
+                            !isValidCron(values.interval, { seconds: false }) &&
+                            'border-red-500'
+                        )}
+                        value={values.interval?.toString() ?? ''}
+                        onValueChange={(v) => {
+                          // 输入限制
+                          if (/^[\d\s*\-,/]*$/.test(v)) {
+                            // 纯数字
+                            if (/^\d+$/.test(v)) {
+                              setValues({ ...values, interval: parseInt(v, 10) || 0 })
+                              return
+                            }
+                            // 非纯数字
+                            try {
+                              setValues({ ...values, interval: v })
+                            } catch {
+                              // ignore
+                            }
+                          }
+                        }}
+                        placeholder={t('profiles.editInfo.intervalPlaceholder')}
+                      />
+
+                      {/* 动态提示信息 */}
+                      <div
+                        className="text-xs"
+                        style={{
+                          color:
+                            typeof values.interval === 'string' &&
+                            !/^\d+$/.test(values.interval) &&
+                            !isValidCron(values.interval, { seconds: false })
+                              ? '#ef4444'
+                              : '#6b7280'
+                        }}
+                      >
+                        {typeof values.interval === 'number'
+                          ? t('profiles.editInfo.intervalMinutes')
+                          : /^\d+$/.test(values.interval?.toString() || '')
+                            ? t('profiles.editInfo.intervalMinutes')
+                            : isValidCron(values.interval?.toString() || '', { seconds: false })
+                              ? t('profiles.editInfo.intervalCron')
+                              : t('profiles.editInfo.intervalHint')}
+                      </div>
+                    </div>
+                  </SettingItem>
+                  <SettingItem title={t('profiles.editInfo.fixedInterval')}>
+                    <Switch
+                      size="sm"
+                      isSelected={values.allowFixedInterval ?? false}
+                      onValueChange={(v) => {
+                        setValues({ ...values, allowFixedInterval: v })
+                      }}
+                    />
+                  </SettingItem>
+                </>
+              )}
             </>
           )}
           <SettingItem title={t('profiles.editInfo.override.title')}>

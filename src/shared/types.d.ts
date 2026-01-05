@@ -238,6 +238,7 @@ interface IAppConfig {
   connectionTableSortDirection?: 'asc' | 'desc'
   spinFloatingIcon?: boolean
   disableTray?: boolean
+  swapTrayClick?: boolean
   showFloatingWindow?: boolean
   floatingWindowCompatMode?: boolean
   disableHardwareAcceleration?: boolean
@@ -294,6 +295,7 @@ interface IAppConfig {
   useDockIcon?: boolean
   showTraffic?: boolean
   disableTrayIconColor?: boolean
+  trayProxyGroupStyle?: 'default' | 'submenu'
   disableAnimations?: boolean
   webdavUrl?: string
   webdavDir?: string
@@ -301,6 +303,7 @@ interface IAppConfig {
   webdavPassword?: string
   webdavMaxBackups?: number
   webdavBackupCron?: string
+  webdavIgnoreCert?: boolean
   useNameserverPolicy: boolean
   nameserverPolicy: { [key: string]: string | string[] }
   showWindowShortcut?: string
@@ -312,7 +315,7 @@ interface IAppConfig {
   directModeShortcut?: string
   restartAppShortcut?: string
   quitWithoutCoreShortcut?: string
-  language?: 'zh-CN' | 'en-US' | 'ru-RU' | 'fa-IR'
+  language?: 'zh-CN' | 'zh-TW' | 'en-US' | 'ru-RU' | 'fa-IR'
   triggerMainWindowBehavior?: 'show' | 'toggle'
   showMixedPort?: number
   enableMixedPort?: boolean
@@ -490,6 +493,8 @@ interface IProfileItem {
   extra?: ISubscriptionUserInfo
   substore?: boolean
   allowFixedInterval?: boolean
+  autoUpdate?: boolean
+  authToken?: string
 }
 
 interface ISubStoreSub {

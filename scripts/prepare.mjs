@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/explicit-function-return-type */
 import fs from 'fs'
 import AdmZip from 'adm-zip'
 import path from 'path'
@@ -305,7 +304,7 @@ const resolveGeosite = () =>
 const resolveGeoIP = () =>
   resolveResource({
     file: 'geoip.dat',
-    downloadURL: `https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geoip-lite.dat`
+    downloadURL: `https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geoip.dat`
   })
 const resolveASN = () =>
   resolveResource({

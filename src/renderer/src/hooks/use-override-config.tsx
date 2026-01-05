@@ -1,4 +1,6 @@
 import React, { createContext, useContext, ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
+import { showError } from '@renderer/utils/error-display'
 import useSWR from 'swr'
 import {
   getOverrideConfig,
@@ -20,6 +22,7 @@ interface OverrideConfigContextType {
 const OverrideConfigContext = createContext<OverrideConfigContextType | undefined>(undefined)
 
 export const OverrideConfigProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const { t } = useTranslation()
   const { data: overrideConfig, mutate: mutateOverrideConfig } = useSWR('getOverrideConfig', () =>
     getOverrideConfig()
   )
@@ -28,7 +31,7 @@ export const OverrideConfigProvider: React.FC<{ children: ReactNode }> = ({ chil
     try {
       await set(config)
     } catch (e) {
-      alert(e)
+      await showError(e, t('common.error.saveOverrideConfigFailed'))
     } finally {
       mutateOverrideConfig()
     }
@@ -38,7 +41,7 @@ export const OverrideConfigProvider: React.FC<{ children: ReactNode }> = ({ chil
     try {
       await add(item)
     } catch (e) {
-      alert(e)
+      await showError(e, t('common.error.addOverrideFailed'))
     } finally {
       mutateOverrideConfig()
     }
@@ -48,7 +51,7 @@ export const OverrideConfigProvider: React.FC<{ children: ReactNode }> = ({ chil
     try {
       await remove(id)
     } catch (e) {
-      alert(e)
+      await showError(e, t('common.error.deleteOverrideFailed'))
     } finally {
       mutateOverrideConfig()
     }
@@ -58,7 +61,7 @@ export const OverrideConfigProvider: React.FC<{ children: ReactNode }> = ({ chil
     try {
       await update(item)
     } catch (e) {
-      alert(e)
+      await showError(e, t('common.error.updateOverrideFailed'))
     } finally {
       mutateOverrideConfig()
     }

@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import SettingCard from '../base/base-setting-card'
+import { toast } from '@renderer/components/base/toast'
 import SettingItem from '../base/base-setting-item'
 import { Button, Input, Select, SelectItem, Switch, Tooltip } from '@heroui/react'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
@@ -58,7 +59,7 @@ const MihomoConfig: React.FC = () => {
             type="number"
             value={(subscriptionTimeout / 1000)?.toString()}
             onValueChange={async (v: string) => {
-              let num = parseInt(v)
+              const num = parseInt(v)
               await patchAppConfig({ subscriptionTimeout: num * 1000 })
             }}
             onBlur={async (e) => {
@@ -122,7 +123,7 @@ const MihomoConfig: React.FC = () => {
                   await navigator.clipboard.writeText(`${url}/raw/clash-party.yaml`)
                 }
               } catch (e) {
-                alert(e)
+                toast.error(String(e))
               }
             }}
           >
@@ -176,15 +177,19 @@ const MihomoConfig: React.FC = () => {
                 })
                 await restartCore()
               } catch (e) {
-                alert(e)
+                toast.error(String(e))
               }
             }}
           >
             <SelectItem key="PRIORITY_HIGHEST">{t('mihomo.cpuPriority.realtime')}</SelectItem>
             <SelectItem key="PRIORITY_HIGH">{t('mihomo.cpuPriority.high')}</SelectItem>
-            <SelectItem key="PRIORITY_ABOVE_NORMAL">{t('mihomo.cpuPriority.aboveNormal')}</SelectItem>
+            <SelectItem key="PRIORITY_ABOVE_NORMAL">
+              {t('mihomo.cpuPriority.aboveNormal')}
+            </SelectItem>
             <SelectItem key="PRIORITY_NORMAL">{t('mihomo.cpuPriority.normal')}</SelectItem>
-            <SelectItem key="PRIORITY_BELOW_NORMAL">{t('mihomo.cpuPriority.belowNormal')}</SelectItem>
+            <SelectItem key="PRIORITY_BELOW_NORMAL">
+              {t('mihomo.cpuPriority.belowNormal')}
+            </SelectItem>
             <SelectItem key="PRIORITY_LOW">{t('mihomo.cpuPriority.low')}</SelectItem>
           </Select>
         </SettingItem>
@@ -208,12 +213,11 @@ const MihomoConfig: React.FC = () => {
               await patchAppConfig({ diffWorkDir: v })
               await restartCore()
             } catch (e) {
-              alert(e)
+              toast.error(String(e))
             }
           }}
         />
       </SettingItem>
-
 
       <SettingItem title={t('mihomo.autoCloseConnection')} divider>
         <Switch

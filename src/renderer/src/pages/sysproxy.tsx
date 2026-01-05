@@ -1,5 +1,6 @@
 import { Button, Input, Tab, Tabs } from '@heroui/react'
 import BasePage from '@renderer/components/base/base-page'
+import { showErrorSync } from '@renderer/utils/error-display'
 import SettingCard from '@renderer/components/base/base-setting-card'
 import SettingItem from '@renderer/components/base/base-setting-item'
 import PacEditorModal from '@renderer/components/sysproxy/pac-editor-modal'
@@ -105,7 +106,7 @@ const Sysproxy: React.FC = () => {
     } catch (e) {
       setValues({ ...values, enable: previousState })
       setChanged(true)
-      alert(e)
+      showErrorSync(e, t('common.error.sysproxySetupFailed'))
 
       await patchAppConfig({ sysProxy: { enable: false } })
     }

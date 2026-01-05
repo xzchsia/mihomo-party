@@ -26,7 +26,8 @@ const cachedLogs: {
   }
 }
 
-window.electron.ipcRenderer.on('mihomoLogs', (_e, log: IMihomoLogInfo) => {
+window.electron.ipcRenderer.on('mihomoLogs', (_e, ...args) => {
+  const log = args[0] as IMihomoLogInfo
   log.time = new Date().toLocaleString()
   cachedLogs.log.push(log)
   if (cachedLogs.log.length >= 500) {
@@ -121,17 +122,9 @@ const Logs: React.FC = () => {
         <Virtuoso
           ref={virtuosoRef}
           data={filteredLogs}
-          itemContent={(i, log) => {
-            return (
-              <LogItem
-                index={i}
-                key={log.payload + i}
-                time={log.time}
-                type={log.type}
-                payload={log.payload}
-              />
-            )
-          }}
+          itemContent={(i, log) => (
+            <LogItem index={i} time={log.time} type={log.type} payload={log.payload} />
+          )}
         />
       </div>
     </BasePage>

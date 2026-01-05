@@ -1,4 +1,6 @@
 import React, { createContext, useContext, ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
+import { showError } from '@renderer/utils/error-display'
 import useSWR from 'swr'
 import { getControledMihomoConfig, patchControledMihomoConfig as patch } from '@renderer/utils/ipc'
 
@@ -13,6 +15,7 @@ const ControledMihomoConfigContext = createContext<ControledMihomoConfigContextT
 )
 
 export const ControledMihomoConfigProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const { t } = useTranslation()
   const { data: controledMihomoConfig, mutate: mutateControledMihomoConfig } = useSWR(
     'getControledMihomoConfig',
     () => getControledMihomoConfig()
@@ -22,18 +25,19 @@ export const ControledMihomoConfigProvider: React.FC<{ children: ReactNode }> = 
     try {
       await patch(value)
     } catch (e) {
-      alert(e)
+      await showError(e, t('common.error.updateCoreConfigFailed'))
     } finally {
       mutateControledMihomoConfig()
     }
   }
 
   React.useEffect(() => {
-    window.electron.ipcRenderer.on('controledMihomoConfigUpdated', () => {
+    const handler = (): void => {
       mutateControledMihomoConfig()
-    })
+    }
+    window.electron.ipcRenderer.on('controledMihomoConfigUpdated', handler)
     return (): void => {
-      window.electron.ipcRenderer.removeAllListeners('controledMihomoConfigUpdated')
+      window.electron.ipcRenderer.removeListener('controledMihomoConfigUpdated', handler)
     }
   }, [])
 

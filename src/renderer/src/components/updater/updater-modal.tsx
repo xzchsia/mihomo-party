@@ -1,12 +1,13 @@
 import {
-  Modal,
-  ModalContent,
-  ModalHeader,
-  ModalBody,
-  ModalFooter,
   Button,
-  Code
+  Code,
+  Modal,
+  ModalBody,
+  ModalContent,
+  ModalFooter,
+  ModalHeader
 } from '@heroui/react'
+import { toast } from '@renderer/components/base/toast'
 import ReactMarkdown from 'react-markdown'
 import React, { useState } from 'react'
 import { downloadAndInstallUpdate } from '@renderer/utils/ipc'
@@ -27,7 +28,7 @@ const UpdaterModal: React.FC<Props> = (props) => {
     try {
       await downloadAndInstallUpdate(version)
     } catch (e) {
-      alert(e)
+      toast.error(String(e))
     }
   }
 
@@ -82,7 +83,7 @@ const UpdaterModal: React.FC<Props> = (props) => {
                 await onUpdate()
                 onClose()
               } catch (e) {
-                alert(e)
+                toast.error(String(e))
               } finally {
                 setDownloading(false)
               }

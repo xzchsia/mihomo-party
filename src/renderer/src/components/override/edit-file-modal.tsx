@@ -1,4 +1,5 @@
 import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Button } from '@heroui/react'
+import { toast } from '@renderer/components/base/toast'
 import React, { useEffect, useState } from 'react'
 import { BaseEditor } from '../base/base-editor'
 import { getOverride, restartCore, setOverride } from '@renderer/utils/ipc'
@@ -35,7 +36,10 @@ const EditFileModal: React.FC<Props> = (props) => {
       <ModalContent className="h-full w-[calc(100%-100px)]">
         <ModalHeader className="flex pb-0 app-drag">
           {t('override.editFile.title', {
-            type: language === 'javascript' ? t('override.editFile.script') : t('override.editFile.config')
+            type:
+              language === 'javascript'
+                ? t('override.editFile.script')
+                : t('override.editFile.config')
           })}
         </ModalHeader>
         <ModalBody className="h-full">
@@ -58,7 +62,7 @@ const EditFileModal: React.FC<Props> = (props) => {
                 await restartCore()
                 onClose()
               } catch (e) {
-                alert(e)
+                toast.error(String(e))
               }
             }}
           >

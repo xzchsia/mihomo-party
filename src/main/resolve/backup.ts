@@ -1,6 +1,7 @@
 import { getAppConfig } from '../config'
 import dayjs from 'dayjs'
 import AdmZip from 'adm-zip'
+import https from 'https'
 import {
   appConfigPath,
   controledMihomoConfigPath,
@@ -21,33 +22,73 @@ import i18next from 'i18next'
 
 let backupCronJob: Cron | null = null
 
-export async function webdavBackup(): Promise<boolean> {
+interface WebDAVContext {
+  client: ReturnType<Awaited<typeof import('webdav/dist/node/index.js')>['createClient']>
+  webdavDir: string
+  webdavMaxBackups: number
+}
+
+async function getWebDAVClient(): Promise<WebDAVContext> {
   const { createClient } = await import('webdav/dist/node/index.js')
   const {
     webdavUrl = '',
     webdavUsername = '',
     webdavPassword = '',
     webdavDir = 'clash-party',
-    webdavMaxBackups = 0
+    webdavMaxBackups = 0,
+    webdavIgnoreCert = false
   } = await getAppConfig()
+
+  const clientOptions: Parameters<typeof createClient>[1] = {
+    username: webdavUsername,
+    password: webdavPassword
+  }
+
+  if (webdavIgnoreCert) {
+    clientOptions.httpsAgent = new https.Agent({
+      rejectUnauthorized: false
+    })
+  }
+
+  const client = createClient(webdavUrl, clientOptions)
+
+  return { client, webdavDir, webdavMaxBackups }
+}
+
+export async function webdavBackup(): Promise<boolean> {
+  const { client, webdavDir, webdavMaxBackups } = await getWebDAVClient()
   const zip = new AdmZip()
 
-  zip.addLocalFile(appConfigPath())
-  zip.addLocalFile(controledMihomoConfigPath())
-  zip.addLocalFile(profileConfigPath())
-  zip.addLocalFile(overrideConfigPath())
-  zip.addLocalFolder(themesDir(), 'themes')
-  zip.addLocalFolder(profilesDir(), 'profiles')
-  zip.addLocalFolder(overrideDir(), 'override')
-  zip.addLocalFolder(rulesDir(), 'rules')
-  zip.addLocalFolder(subStoreDir(), 'substore')
+  if (existsSync(appConfigPath())) {
+    zip.addLocalFile(appConfigPath())
+  }
+  if (existsSync(controledMihomoConfigPath())) {
+    zip.addLocalFile(controledMihomoConfigPath())
+  }
+  if (existsSync(profileConfigPath())) {
+    zip.addLocalFile(profileConfigPath())
+  }
+  if (existsSync(overrideConfigPath())) {
+    zip.addLocalFile(overrideConfigPath())
+  }
+  if (existsSync(themesDir())) {
+    zip.addLocalFolder(themesDir(), 'themes')
+  }
+  if (existsSync(profilesDir())) {
+    zip.addLocalFolder(profilesDir(), 'profiles')
+  }
+  if (existsSync(overrideDir())) {
+    zip.addLocalFolder(overrideDir(), 'override')
+  }
+  if (existsSync(rulesDir())) {
+    zip.addLocalFolder(rulesDir(), 'rules')
+  }
+  if (existsSync(subStoreDir())) {
+    zip.addLocalFolder(subStoreDir(), 'substore')
+  }
   const date = new Date()
   const zipFileName = `${process.platform}_${dayjs(date).format('YYYY-MM-DD_HH-mm-ss')}.zip`
 
-  const client = createClient(webdavUrl, {
-    username: webdavUsername,
-    password: webdavPassword
-  })
   try {
     await client.createDirectory(webdavDir)
   } catch {
@@ -92,36 +133,14 @@ export async function webdavBackup(): Promise<boolean> {
 }
 
 export async function webdavRestore(filename: string): Promise<void> {
-  const { createClient } = await import('webdav/dist/node/index.js')
-  const {
-    webdavUrl = '',
-    webdavUsername = '',
-    webdavPassword = '',
-    webdavDir = 'clash-party'
-  } = await getAppConfig()
-
-  const client = createClient(webdavUrl, {
-    username: webdavUsername,
-    password: webdavPassword
-  })
+  const { client, webdavDir } = await getWebDAVClient()
   const zipData = await client.getFileContents(`${webdavDir}/${filename}`)
   const zip = new AdmZip(zipData as Buffer)
   zip.extractAllTo(dataDir(), true)
 }
 
 export async function listWebdavBackups(): Promise<string[]> {
-  const { createClient } = await import('webdav/dist/node/index.js')
-  const {
-    webdavUrl = '',
-    webdavUsername = '',
-    webdavPassword = '',
-    webdavDir = 'clash-party'
-  } = await getAppConfig()
-
-  const client = createClient(webdavUrl, {
-    username: webdavUsername,
-    password: webdavPassword
-  })
+  const { client, webdavDir } = await getWebDAVClient()
   const files = await client.getDirectoryContents(webdavDir, { glob: '*.zip' })
   if (Array.isArray(files)) {
     return files.map((file) => file.basename)
@@ -131,23 +150,12 @@ export async function listWebdavBackups(): Promise<string[]> {
 }
 
 export async function webdavDelete(filename: string): Promise<void> {
-  const { createClient } = await import('webdav/dist/node/index.js')
-  const {
-    webdavUrl = '',
-    webdavUsername = '',
-    webdavPassword = '',
-    webdavDir = 'clash-party'
-  } = await getAppConfig()
-
-  const client = createClient(webdavUrl, {
-    username: webdavUsername,
-    password: webdavPassword
-  })
+  const { client, webdavDir } = await getWebDAVClient()
   await client.deleteFile(`${webdavDir}/${filename}`)
 }
 
 /**
- * 初始化WebDAV定时备份任务
+ * 初始化 WebDAV 定时备份任务
  */
 export async function initWebdavBackupScheduler(): Promise<void> {
   try {
@@ -158,8 +166,8 @@ export async function initWebdavBackupScheduler(): Promise<void> {
     }
 
     const { webdavBackupCron } = await getAppConfig()
-    
-    // 如果配置了Cron表达式，则启动定时任务
+
+    // 如果配置了 Cron 表达式，则启动定时任务
     if (webdavBackupCron) {
       backupCronJob = new Cron(webdavBackupCron, async () => {
         try {
@@ -169,7 +177,7 @@ export async function initWebdavBackupScheduler(): Promise<void> {
           await systemLogger.error('Failed to execute WebDAV backup via cron job', error)
         }
       })
-      
+
       await systemLogger.info(`WebDAV backup scheduler initialized with cron: ${webdavBackupCron}`)
       await systemLogger.info(`WebDAV backup scheduler nextRun: ${backupCronJob.nextRun()}`)
     } else {
@@ -181,7 +189,7 @@ export async function initWebdavBackupScheduler(): Promise<void> {
 }
 
 /**
- * 停止WebDAV定时备份任务
+ * 停止 WebDAV 定时备份任务
  */
 export async function stopWebdavBackupScheduler(): Promise<void> {
   if (backupCronJob) {
@@ -192,7 +200,7 @@ export async function stopWebdavBackupScheduler(): Promise<void> {
 }
 
 /**
- * 重新初始化WebDAV定时备份任务
+ * 重新初始化 WebDAV 定时备份任务
  * 先停止现有任务，然后重新启动
  */
 export async function reinitScheduler(): Promise<void> {
@@ -234,7 +242,7 @@ export async function exportLocalBackup(): Promise<boolean> {
   if (existsSync(rulesDir())) {
     zip.addLocalFolder(rulesDir(), 'rules')
   }
-  
+
   const date = new Date()
   const zipFileName = `clash-party-backup-${dayjs(date).format('YYYY-MM-DD_HH-mm-ss')}.zip`
   const result = await dialog.showSaveDialog({
@@ -245,7 +253,7 @@ export async function exportLocalBackup(): Promise<boolean> {
       { name: 'All Files', extensions: ['*'] }
     ]
   })
-  
+
   if (!result.canceled && result.filePath) {
     zip.writeZip(result.filePath)
     await systemLogger.info(`Local backup exported to: ${result.filePath}`)
@@ -266,7 +274,7 @@ export async function importLocalBackup(): Promise<boolean> {
     ],
     properties: ['openFile']
   })
-  
+
   if (!result.canceled && result.filePaths.length > 0) {
     const filePath = result.filePaths[0]
     const zip = new AdmZip(filePath)

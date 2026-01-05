@@ -42,7 +42,7 @@ import {
 } from '../config'
 import { app, dialog } from 'electron'
 import { startSSIDCheck } from '../sys/ssid'
-import i18next from '../../shared/i18n'
+import i18next, { resources } from '../../shared/i18n'
 import { initLogger } from './logger'
 
 let isInitBasicCompleted = false
@@ -54,11 +54,9 @@ export function safeShowErrorBox(titleKey: string, message: string): void {
     title = i18next.t(titleKey)
     if (!title || title === titleKey) throw new Error('Translation not ready')
   } catch {
-    const isZh = process.env.LANG?.startsWith('zh') || process.env.LC_ALL?.startsWith('zh')
-    const fallbacks: Record<string, { zh: string; en: string }> = {
-      'mihomo.error.coreStartFailed': { zh: '内核启动出错', en: 'Core start failed' }
-    }
-    title = fallbacks[titleKey] ? (isZh ? fallbacks[titleKey].zh : fallbacks[titleKey].en) : (isZh ? '错误' : 'Error')
+    const isZh = app.getLocale().startsWith('zh')
+    const lang = isZh ? resources['zh-CN'].translation : resources['en-US'].translation
+    title = lang[titleKey] || (isZh ? '错误' : 'Error')
   }
   dialog.showErrorBox(title, message)
 }
@@ -86,7 +84,7 @@ async function fixDataDirPermissions(): Promise<void> {
   }
 }
 
-  // 比较修改geodata文件修改时间
+// 比较修改 geodata 文件修改时间
 async function isSourceNewer(sourcePath: string, targetPath: string): Promise<boolean> {
   try {
     const sourceStats = await stat(sourcePath)
@@ -132,7 +130,11 @@ async function initConfig(): Promise<void> {
     { path: profileConfigPath(), content: defaultProfileConfig, name: 'profile config' },
     { path: overrideConfigPath(), content: defaultOverrideConfig, name: 'override config' },
     { path: profilePath('default'), content: defaultProfile, name: 'default profile' },
-    { path: controledMihomoConfigPath(), content: defaultControledMihomoConfig, name: 'mihomo config' }
+    {
+      path: controledMihomoConfigPath(),
+      content: defaultControledMihomoConfig,
+      name: 'mihomo config'
+    }
   ]
 
   for (const config of configs) {
@@ -156,13 +158,15 @@ async function initFiles(): Promise<void> {
     try {
       // 检查是否需要复制
       if (existsSync(sourcePath)) {
-        const shouldCopyToWork = !existsSync(targetPath) || await isSourceNewer(sourcePath, targetPath)
+        const shouldCopyToWork =
+          !existsSync(targetPath) || (await isSourceNewer(sourcePath, targetPath))
         if (shouldCopyToWork) {
           await cp(sourcePath, targetPath, { recursive: true, force: true })
         }
       }
       if (existsSync(sourcePath)) {
-        const shouldCopyToTest = !existsSync(testTargetPath) || await isSourceNewer(sourcePath, testTargetPath)
+        const shouldCopyToTest =
+          !existsSync(testTargetPath) || (await isSourceNewer(sourcePath, testTargetPath))
         if (shouldCopyToTest) {
           await cp(sourcePath, testTargetPath, { recursive: true, force: true })
         }
@@ -209,8 +213,12 @@ async function cleanup(): Promise<void> {
   // logs
   const { maxLogDays = 7 } = await getAppConfig()
   const logs = await readdir(logDir())
+  const datePattern = /^\d{4}-\d{2}-\d{2}/
   for (const log of logs) {
-    const date = new Date(log.split('.')[0])
+    const match = log.match(datePattern)
+    if (!match) continue
+    const date = new Date(match[0])
+    if (isNaN(date.getTime())) continue
     const diff = Date.now() - date.getTime()
     if (diff > maxLogDays * 24 * 60 * 60 * 1000) {
       try {
@@ -225,7 +233,7 @@ async function cleanup(): Promise<void> {
 async function migrateSubStoreFiles(): Promise<void> {
   const oldJsPath = path.join(mihomoWorkDir(), 'sub-store.bundle.js')
   const newCjsPath = path.join(mihomoWorkDir(), 'sub-store.bundle.cjs')
-  
+
   if (existsSync(oldJsPath) && !existsSync(newCjsPath)) {
     try {
       await rename(oldJsPath, newCjsPath)
@@ -278,7 +286,7 @@ async function migration(): Promise<void> {
   if (!skipAuthPrefixes) {
     await patchControledMihomoConfig({ 'skip-auth-prefixes': ['127.0.0.1/32', '::1/128'] })
   } else if (skipAuthPrefixes.length >= 1 && skipAuthPrefixes[0] === '127.0.0.1/32') {
-    const filteredPrefixes = skipAuthPrefixes.filter(ip => ip !== '::1/128')
+    const filteredPrefixes = skipAuthPrefixes.filter((ip) => ip !== '::1/128')
     const newPrefixes = [filteredPrefixes[0], '::1/128', ...filteredPrefixes.slice(1)]
     if (JSON.stringify(newPrefixes) !== JSON.stringify(skipAuthPrefixes)) {
       await patchControledMihomoConfig({ 'skip-auth-prefixes': newPrefixes })

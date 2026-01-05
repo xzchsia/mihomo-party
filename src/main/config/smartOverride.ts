@@ -7,7 +7,12 @@ const SMART_OVERRIDE_ID = 'smart-core-override'
 /**
  * Smart 内核的覆写配置模板
  */
-function generateSmartOverrideTemplate(useLightGBM: boolean, collectData: boolean, strategy: string, collectorSize: number): string {
+function generateSmartOverrideTemplate(
+  useLightGBM: boolean,
+  collectData: boolean,
+  strategy: string,
+  collectorSize: number
+): string {
   return `
 // 配置会在启用 Smart 内核时自动应用
 
@@ -339,30 +344,14 @@ export async function createSmartOverride(): Promise<void> {
       smartCollectorSize
     )
 
-    // 检查是否已存在 Smart 覆写配置
-    const existingOverride = await getOverrideItem(SMART_OVERRIDE_ID)
-
-    if (existingOverride) {
-      // 如果已存在，更新配置
-      await addOverrideItem({
-        id: SMART_OVERRIDE_ID,
-        name: 'Smart Core Override',
-        type: 'local',
-        ext: 'js',
-        global: true,
-        file: template
-      })
-    } else {
-      // 如果不存在，创建新的覆写配置
-      await addOverrideItem({
-        id: SMART_OVERRIDE_ID,
-        name: 'Smart Core Override',
-        type: 'local',
-        ext: 'js',
-        global: true,
-        file: template
-      })
-    }
+    await addOverrideItem({
+      id: SMART_OVERRIDE_ID,
+      name: 'Smart Core Override',
+      type: 'local',
+      ext: 'js',
+      global: true,
+      file: template
+    })
   } catch (error) {
     await overrideLogger.error('Failed to create Smart override', error)
     throw error

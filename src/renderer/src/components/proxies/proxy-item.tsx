@@ -22,9 +22,18 @@ function delayColor(delay: number): 'primary' | 'success' | 'warning' | 'danger'
   return 'warning'
 }
 
-const ProxyItem: React.FC<Props> = React.memo((props) => {
+const ProxyItemBase: React.FC<Props> = (props) => {
   const { t } = useTranslation()
-  const { mutateProxies, proxyDisplayMode, group, proxy, selected, onSelect, onProxyDelay, isGroupTesting = false } = props
+  const {
+    mutateProxies,
+    proxyDisplayMode,
+    group,
+    proxy,
+    selected,
+    onSelect,
+    onProxyDelay,
+    isGroupTesting = false
+  } = props
 
   const delay = useMemo(() => {
     if (proxy.history.length > 0) {
@@ -61,16 +70,16 @@ const ProxyItem: React.FC<Props> = React.memo((props) => {
       fullWidth
       shadow="sm"
       className={`${
-        fixed 
-          ? 'bg-secondary/30 border-r-2 border-r-secondary border-l-2 border-l-secondary' 
-          : selected 
-            ? 'bg-primary/30 border-r-2 border-r-primary border-l-2 border-l-primary' 
+        fixed
+          ? 'bg-secondary/30 border-r-2 border-r-secondary border-l-2 border-l-secondary'
+          : selected
+            ? 'bg-primary/30 border-r-2 border-r-primary border-l-2 border-l-primary'
             : 'bg-content2'
       }`}
       radius="sm"
     >
-    <CardBody className="p-1">
-      {proxyDisplayMode === 'full' ? (
+      <CardBody className="p-1">
+        {proxyDisplayMode === 'full' ? (
           <div className="flex flex-col gap-1">
             <div className="flex justify-between items-center pl-1">
               <div className="text-ellipsis overflow-hidden whitespace-nowrap">
@@ -81,7 +90,7 @@ const ProxyItem: React.FC<Props> = React.memo((props) => {
               {fixed && (
                 <Button
                   isIconOnly
-                    title={t('proxies.unpin')}
+                  title={t('proxies.unpin')}
                   color="danger"
                   onPress={async () => {
                     await mihomoUnfixedProxy(group.name)
@@ -99,12 +108,16 @@ const ProxyItem: React.FC<Props> = React.memo((props) => {
                 <div className="text-foreground-400 text-xs bg-default-100 px-1 rounded-md">
                   {proxy.type}
                 </div>
-                {['tfo', 'udp', 'xudp', 'mptcp', 'smux'].map(protocol => 
-                  proxy[protocol as keyof IMihomoProxy] && (
-                    <div key={protocol} className="text-foreground-400 text-xs bg-default-100 px-1 rounded-md">
-                      {protocol}
-                    </div>
-                  )
+                {['tfo', 'udp', 'xudp', 'mptcp', 'smux'].map(
+                  (protocol) =>
+                    proxy[protocol as keyof IMihomoProxy] && (
+                      <div
+                        key={protocol}
+                        className="text-foreground-400 text-xs bg-default-100 px-1 rounded-md"
+                      >
+                        {protocol}
+                      </div>
+                    )
                 )}
               </div>
               <Button
@@ -116,55 +129,53 @@ const ProxyItem: React.FC<Props> = React.memo((props) => {
                 variant="light"
                 className="h-full text-sm ml-auto -mt-0.5 px-2 relative w-min whitespace-nowrap"
               >
-                <div className="w-full h-full flex items-center justify-end">
-                  {delayText}
-                </div>
+                <div className="w-full h-full flex items-center justify-end">{delayText}</div>
               </Button>
             </div>
           </div>
         ) : (
-        <div className="flex justify-between items-center pl-1">
-          <div className="text-ellipsis overflow-hidden whitespace-nowrap">
-            <div className="flag-emoji inline" title={proxy.name}>
-              {proxy.name}
+          <div className="flex justify-between items-center pl-1">
+            <div className="text-ellipsis overflow-hidden whitespace-nowrap">
+              <div className="flag-emoji inline" title={proxy.name}>
+                {proxy.name}
+              </div>
             </div>
-          </div>
-          <div className="flex justify-end">
-            {fixed && (
+            <div className="flex justify-end">
+              {fixed && (
+                <Button
+                  isIconOnly
+                  title={t('proxies.unpin')}
+                  color="danger"
+                  onPress={async () => {
+                    await mihomoUnfixedProxy(group.name)
+                    mutateProxies()
+                  }}
+                  variant="light"
+                  className="h-[20px] p-0 text-sm"
+                >
+                  <FaMapPin className="text-md le" />
+                </Button>
+              )}
               <Button
                 isIconOnly
-                    title={t('proxies.unpin')}
-                color="danger"
-                onPress={async () => {
-                  await mihomoUnfixedProxy(group.name)
-                  mutateProxies()
-                }}
+                title={proxy.type}
+                isLoading={isLoading}
+                color={delayColor(delay)}
+                onPress={onDelay}
                 variant="light"
-                className="h-[20px] p-0 text-sm"
+                className="h-full text-sm px-2 relative w-min whitespace-nowrap"
               >
-                <FaMapPin className="text-md le" />
+                <div className="w-full h-full flex items-center justify-end">{delayText}</div>
               </Button>
-            )}
-            <Button
-              isIconOnly
-              title={proxy.type}
-              isLoading={isLoading}
-              color={delayColor(delay)}
-              onPress={onDelay}
-              variant="light"
-              className="h-full text-sm px-2 relative w-min whitespace-nowrap"
-            >
-              <div className="w-full h-full flex items-center justify-end">
-                {delayText}
-              </div>
-            </Button>
+            </div>
           </div>
-        </div>
-      )}
+        )}
       </CardBody>
     </Card>
   )
-}, (prevProps, nextProps) => {
+}
+
+const ProxyItem = React.memo(ProxyItemBase, (prevProps, nextProps) => {
   // 必要时重新渲染
   return (
     prevProps.proxy.name === nextProps.proxy.name &&

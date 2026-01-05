@@ -11,10 +11,11 @@ import {
   profilePath,
   resourcesDir
 } from '../utils/dirs'
+import i18next from 'i18next'
 
 export function getFilePath(ext: string[]): string[] | undefined {
   return dialog.showOpenDialogSync({
-    title: '选择订阅文件',
+    title: i18next.t('common.dialog.selectSubscriptionFile'),
     filters: [{ name: `${ext} file`, extensions: ext }],
     properties: ['openFile']
   })
@@ -43,7 +44,7 @@ export async function openUWPTool(): Promise<void> {
 
   if (!isAdmin) {
     const escapedPath = uwpToolPath.replace(/'/g, "''")
-    const command = `powershell -Command "Start-Process -FilePath '${escapedPath}' -Verb RunAs -Wait"`
+    const command = `powershell -NoProfile -Command "Start-Process -FilePath '${escapedPath}' -Verb RunAs -Wait"`
 
     await execPromise(command, { windowsHide: true })
     return
@@ -76,8 +77,6 @@ export async function setupFirewall(): Promise<void> {
 export function setNativeTheme(theme: 'system' | 'light' | 'dark'): void {
   nativeTheme.themeSource = theme
 }
-
-
 
 export function resetAppConfig(): void {
   if (process.platform === 'win32') {

@@ -5,7 +5,9 @@
 @source '../../../../node_modules/@heroui/theme/dist/**/*.{js,ts,jsx,tsx}';
 
 @theme {
-  --default-font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  --default-font-family:
+    system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell,
+    'Open Sans', 'Helvetica Neue', sans-serif;
 }
 
 @font-face {
@@ -79,6 +81,10 @@
   user-select: none;
 }
 
+.select-text {
+  user-select: text !important;
+}
+
 *:focus {
   outline: none;
   outline-color: transparent;
@@ -143,4 +149,49 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   overflow: hidden;
+}
+
+/* Toast */
+.toast-enter {
+  animation: toast-in 0.2s ease-out forwards;
+}
+
+.toast-exit {
+  animation: toast-out 0.15s ease-in forwards;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes toast-out {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+}
+
+.toast-progress {
+  animation: progress-shrink linear forwards;
+  width: 100%;
+}
+
+@keyframes progress-shrink {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
 }

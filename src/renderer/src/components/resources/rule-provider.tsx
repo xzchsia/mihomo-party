@@ -10,6 +10,7 @@ import useSWR from 'swr'
 import SettingCard from '../base/base-setting-card'
 import SettingItem from '../base/base-setting-item'
 import { Button, Chip } from '@heroui/react'
+import { toast } from '@renderer/components/base/toast'
 import { IoMdRefresh } from 'react-icons/io'
 import { CgLoadbarDoc } from 'react-icons/cg'
 import { MdEditDocument } from 'react-icons/md'
@@ -24,23 +25,25 @@ const RuleProvider: React.FC = () => {
     type: '',
     title: '',
     format: '',
-    privderType: ''
+    privderType: '',
+    behavior: ''
   })
   useEffect(() => {
     if (showDetails.title) {
       const fetchProviderPath = async (name: string): Promise<void> => {
         try {
-          const providers= await getRuntimeConfig()
+          const providers = await getRuntimeConfig()
           const provider = providers['rule-providers'][name]
           if (provider) {
             setShowDetails((prev) => ({
               ...prev,
               show: true,
-              path: provider?.path || `rules/${getHash(provider?.url)}`
+              path: provider?.path || `rules/${getHash(provider?.url)}`,
+              behavior: provider?.behavior || 'domain'
             }))
           }
         } catch {
-          setShowDetails((prev) => ({ ...prev, path: '' }))
+          setShowDetails((prev) => ({ ...prev, path: '', behavior: '' }))
         }
       }
       fetchProviderPath(showDetails.title)
@@ -71,7 +74,7 @@ const RuleProvider: React.FC = () => {
       await mihomoUpdateRuleProviders(name)
       mutate()
     } catch (e) {
-      alert(e)
+      toast.error(String(e))
     } finally {
       setUpdating((prev) => {
         prev[index] = false
@@ -93,7 +96,18 @@ const RuleProvider: React.FC = () => {
           title={showDetails.title}
           format={showDetails.format}
           privderType={showDetails.privderType}
-          onClose={() => setShowDetails({ show: false, path: '', type: '', title: '', format: '', privderType: '' })}
+          behavior={showDetails.behavior}
+          onClose={() =>
+            setShowDetails({
+              show: false,
+              path: '',
+              type: '',
+              title: '',
+              format: '',
+              privderType: '',
+              behavior: ''
+            })
+          }
         />
       )}
       <SettingItem title={t('resources.ruleProviders.title')} divider>
@@ -121,30 +135,31 @@ const RuleProvider: React.FC = () => {
           >
             <div className="flex h-[32px] leading-[32px] text-foreground-500">
               <div>{dayjs(provider.updatedAt).fromNow()}</div>
-              {provider.format !== 'MrsRule' && (
-                <Button
-                  isIconOnly
-                  title={provider.vehicleType == 'File' ? t('common.editor.edit') : t('common.viewer.view')}
-                  className="ml-2"
-                  size="sm"
-                  onPress={() => {
-                    setShowDetails({
-                      show: false,
-                      privderType: 'rule-providers',
-                      path: provider.name,
-                      type: provider.vehicleType,
-                      title: provider.name,
-                      format: provider.format
-                    })
-                  }}
-                >
-                  {provider.vehicleType == 'File' ? (
-                    <MdEditDocument className={`text-lg`} />
-                  ) : (
-                    <CgLoadbarDoc className={`text-lg`} />
-                  )}
-                </Button>
-              )}
+              <Button
+                isIconOnly
+                title={
+                  provider.vehicleType == 'File' ? t('common.editor.edit') : t('common.viewer.view')
+                }
+                className="ml-2"
+                size="sm"
+                onPress={() => {
+                  setShowDetails({
+                    show: false,
+                    privderType: 'rule-providers',
+                    path: provider.name,
+                    type: provider.vehicleType,
+                    title: provider.name,
+                    format: provider.format,
+                    behavior: provider.behavior || 'domain'
+                  })
+                }}
+              >
+                {provider.vehicleType == 'File' ? (
+                  <MdEditDocument className={`text-lg`} />
+                ) : (
+                  <CgLoadbarDoc className={`text-lg`} />
+                )}
+              </Button>
               <Button
                 isIconOnly
                 title={t('common.updater.update')}

@@ -2,7 +2,7 @@ import { triggerAutoProxy, triggerManualProxy } from '@mihomo-party/sysproxy'
 import { getAppConfig, getControledMihomoConfig } from '../config'
 import { pacPort, startPacServer, stopPacServer } from '../resolve/server'
 import { promisify } from 'util'
-import { execFile } from 'child_process'
+import { exec, execFile } from 'child_process'
 import path from 'path'
 import { resourcesFilesDir } from '../utils/dirs'
 import { net } from 'electron'
@@ -10,47 +10,52 @@ import axios from 'axios'
 import fs from 'fs'
 import { proxyLogger } from '../utils/logger'
 
-let defaultBypass: string[]
 let triggerSysProxyTimer: NodeJS.Timeout | null = null
 const helperSocketPath = '/tmp/mihomo-party-helper.sock'
 
-if (process.platform === 'linux')
-  defaultBypass = ['localhost', '127.0.0.1', '192.168.0.0/16', '10.0.0.0/8', '172.16.0.0/12', '::1']
-if (process.platform === 'darwin')
-  defaultBypass = [
-    '127.0.0.1',
-    '192.168.0.0/16',
-    '10.0.0.0/8',
-    '172.16.0.0/12',
-    'localhost',
-    '*.local',
-    '*.crashlytics.com',
-    '<local>'
-  ]
-if (process.platform === 'win32')
-  defaultBypass = [
-    'localhost',
-    '127.*',
-    '192.168.*',
-    '10.*',
-    '172.16.*',
-    '172.17.*',
-    '172.18.*',
-    '172.19.*',
-    '172.20.*',
-    '172.21.*',
-    '172.22.*',
-    '172.23.*',
-    '172.24.*',
-    '172.25.*',
-    '172.26.*',
-    '172.27.*',
-    '172.28.*',
-    '172.29.*',
-    '172.30.*',
-    '172.31.*',
-    '<local>'
-  ]
+const defaultBypass: string[] = (() => {
+  switch (process.platform) {
+    case 'linux':
+      return ['localhost', '127.0.0.1', '192.168.0.0/16', '10.0.0.0/8', '172.16.0.0/12', '::1']
+    case 'darwin':
+      return [
+        '127.0.0.1',
+        '192.168.0.0/16',
+        '10.0.0.0/8',
+        '172.16.0.0/12',
+        'localhost',
+        '*.local',
+        '*.crashlytics.com',
+        '<local>'
+      ]
+    case 'win32':
+      return [
+        'localhost',
+        '127.*',
+        '192.168.*',
+        '10.*',
+        '172.16.*',
+        '172.17.*',
+        '172.18.*',
+        '172.19.*',
+        '172.20.*',
+        '172.21.*',
+        '172.22.*',
+        '172.23.*',
+        '172.24.*',
+        '172.25.*',
+        '172.26.*',
+        '172.27.*',
+        '172.28.*',
+        '172.29.*',
+        '172.30.*',
+        '172.31.*',
+        '<local>'
+      ]
+    default:
+      return ['localhost', '127.0.0.1', '192.168.0.0/16', '10.0.0.0/8', '172.16.0.0/12', '::1']
+  }
+})()
 
 export async function triggerSysProxy(enable: boolean): Promise<void> {
   if (net.isOnline()) {
@@ -84,7 +89,7 @@ async function enableSysProxy(): Promise<void> {
           triggerAutoProxy(true, `http://${host || '127.0.0.1'}:${pacPort}/pac`)
         }
       } else if (process.platform === 'darwin') {
-        await helperRequest(() => 
+        await helperRequest(() =>
           axios.post(
             'http://localhost/pac',
             { url: `http://${host || '127.0.0.1'}:${pacPort}/pac` },
@@ -160,21 +165,34 @@ function isSocketFileExists(): boolean {
   }
 }
 
-// Helper function to send signal to recreate socket
+// Check if helper process is running (no admin privileges needed)
+async function isHelperRunning(): Promise<boolean> {
+  try {
+    const execPromise = promisify(exec)
+    const { stdout } = await execPromise('pgrep -f party.mihomo.helper')
+    return stdout.trim().length > 0
+  } catch {
+    return false
+  }
+}
+
+// Start or restart helper service via launchctl
+async function startHelperService(): Promise<void> {
+  const execPromise = promisify(exec)
+  const shell = `launchctl kickstart -k system/party.mihomo.helper`
+  const command = `do shell script "${shell}" with administrator privileges`
+  await execPromise(`osascript -e '${command}'`)
+  await new Promise((resolve) => setTimeout(resolve, 1500))
+}
+
+// Send signal to recreate socket (only if process is running)
 async function requestSocketRecreation(): Promise<void> {
   try {
-    // Send SIGUSR1 signal to helper process to recreate socket
-    const { exec } = require('child_process')
-    const { promisify } = require('util')
     const execPromise = promisify(exec)
-    
-    // Use osascript with administrator privileges (same pattern as grantTunPermissions)
     const shell = `pkill -USR1 -f party.mihomo.helper`
     const command = `do shell script "${shell}" with administrator privileges`
     await execPromise(`osascript -e '${command}'`)
-    
-    // Wait a bit for socket recreation
-    await new Promise(resolve => setTimeout(resolve, 1000))
+    await new Promise((resolve) => setTimeout(resolve, 1000))
   } catch (error) {
     await proxyLogger.error('Failed to send signal to helper', error)
     throw error
@@ -182,26 +200,42 @@ async function requestSocketRecreation(): Promise<void> {
 }
 
 // Wrapper function for helper requests with auto-retry on socket issues
-async function helperRequest(requestFn: () => Promise<unknown>, maxRetries = 1): Promise<unknown> {
+async function helperRequest(requestFn: () => Promise<unknown>, maxRetries = 2): Promise<unknown> {
   let lastError: Error | null = null
-  
+
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       return await requestFn()
     } catch (error) {
       lastError = error as Error
-      
-      // Check if it's a connection error and socket file doesn't exist
-      if (attempt < maxRetries && 
-          ((error as NodeJS.ErrnoException).code === 'ECONNREFUSED' || 
-           (error as NodeJS.ErrnoException).code === 'ENOENT' || 
-           (error as Error).message?.includes('connect ECONNREFUSED') ||
-           (error as Error).message?.includes('ENOENT'))) {
-        
-        await proxyLogger.info(`Helper request failed (attempt ${attempt + 1}), checking socket file...`)
+      const errCode = (error as NodeJS.ErrnoException).code
+      const errMsg = (error as Error).message || ''
 
-        if (!isSocketFileExists()) {
-          await proxyLogger.info('Socket file missing, requesting recreation...')
+      if (
+        attempt < maxRetries &&
+        (errCode === 'ECONNREFUSED' ||
+          errCode === 'ENOENT' ||
+          errMsg.includes('connect ECONNREFUSED') ||
+          errMsg.includes('ENOENT'))
+      ) {
+        await proxyLogger.info(
+          `Helper request failed (attempt ${attempt + 1}/${maxRetries + 1}), checking helper status...`
+        )
+
+        const helperRunning = await isHelperRunning()
+        const socketExists = isSocketFileExists()
+
+        if (!helperRunning) {
+          await proxyLogger.info('Helper process not running, starting service...')
+          try {
+            await startHelperService()
+            await proxyLogger.info('Helper service started, retrying...')
+            continue
+          } catch (startError) {
+            await proxyLogger.warn('Failed to start helper service', startError)
+          }
+        } else if (!socketExists) {
+          await proxyLogger.info('Socket file missing but helper running, requesting recreation...')
           try {
             await requestSocketRecreation()
             await proxyLogger.info('Socket recreation requested, retrying...')
@@ -211,13 +245,12 @@ async function helperRequest(requestFn: () => Promise<unknown>, maxRetries = 1):
           }
         }
       }
-      
-      // If not a connection error or we've exhausted retries, throw the error
+
       if (attempt === maxRetries) {
         throw lastError
       }
     }
   }
-  
+
   throw lastError
 }

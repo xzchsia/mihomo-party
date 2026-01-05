@@ -8,6 +8,7 @@ import {
   DropdownMenu,
   DropdownTrigger
 } from '@heroui/react'
+import { toast } from '@renderer/components/base/toast'
 import { IoMdMore, IoMdRefresh } from 'react-icons/io'
 import dayjs from '@renderer/utils/dayjs'
 import React, { Key, useMemo, useState } from 'react'
@@ -124,8 +125,6 @@ const OverrideItem: React.FC<Props> = (props) => {
     }
   }
 
-
-
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
@@ -169,12 +168,7 @@ const OverrideItem: React.FC<Props> = (props) => {
           setOpenFileEditor(true)
         }}
       >
-        <div
-          ref={setNodeRef}
-          {...attributes}
-          {...listeners}
-          className="h-full w-full"
-        >
+        <div ref={setNodeRef} {...attributes} {...listeners} className="h-full w-full">
           <CardBody>
             <div className="flex justify-between h-[32px]">
               <h3
@@ -197,7 +191,7 @@ const OverrideItem: React.FC<Props> = (props) => {
                         await addOverrideItem(info)
                         await restartCore()
                       } catch (e) {
-                        alert(e)
+                        toast.error(String(e))
                       } finally {
                         setUpdating(false)
                       }
@@ -210,10 +204,7 @@ const OverrideItem: React.FC<Props> = (props) => {
                   </Button>
                 )}
 
-                <Dropdown
-                  isOpen={dropdownOpen}
-                  onOpenChange={setDropdownOpen}
-                >
+                <Dropdown isOpen={dropdownOpen} onOpenChange={setDropdownOpen}>
                   <DropdownTrigger>
                     <Button isIconOnly size="sm" variant="light" color="default">
                       <IoMdMore color="default" className={`text-[24px]`} />

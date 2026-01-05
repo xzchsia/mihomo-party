@@ -1,4 +1,5 @@
 import { Button, Card, CardBody, CardFooter, Tooltip } from '@heroui/react'
+import { toast } from '@renderer/components/base/toast'
 import BorderSwitch from '@renderer/components/base/border-swtich'
 import { RiScan2Fill } from 'react-icons/ri'
 import { useLocation, useNavigate } from 'react-router-dom'
@@ -17,7 +18,11 @@ const SniffCard: React.FC<Props> = (props) => {
   const { t } = useTranslation()
   const { appConfig, patchAppConfig } = useAppConfig()
   const { iconOnly } = props
-  const { sniffCardStatus = 'col-span-1', controlSniff = true, disableAnimations = false } = appConfig || {}
+  const {
+    sniffCardStatus = 'col-span-1',
+    controlSniff = true,
+    disableAnimations = false
+  } = appConfig || {}
   const location = useLocation()
   const navigate = useNavigate()
   const match = location.pathname.includes('/sniffer')
@@ -39,7 +44,7 @@ const SniffCard: React.FC<Props> = (props) => {
       await patchControledMihomoConfig({})
       await restartCore()
     } catch (e) {
-      alert(e)
+      toast.error(String(e))
     }
   }
 

@@ -8,6 +8,7 @@ import {
   Input
 } from '@heroui/react'
 import BasePage from '@renderer/components/base/base-page'
+import { toast } from '@renderer/components/base/toast'
 import { getFilePath, readTextFile } from '@renderer/utils/ipc'
 import { useEffect, useRef, useState } from 'react'
 import { MdContentPaste } from 'react-icons/md'
@@ -54,6 +55,8 @@ const Override: React.FC = () => {
         url,
         ext: urlObj.pathname.endsWith('.js') ? 'js' : 'yaml'
       })
+    } catch (e) {
+      toast.error(t('override.error.importFailed', { error: String(e) }))
     } finally {
       setImporting(false)
     }
@@ -75,18 +78,29 @@ const Override: React.FC = () => {
     }
   }
 
+  const addOverrideItemRef = useRef(addOverrideItem)
+  addOverrideItemRef.current = addOverrideItem
+
+  const tRef = useRef(t)
+  tRef.current = t
+
   useEffect(() => {
-    pageRef.current?.addEventListener('dragover', (e) => {
+    const element = pageRef.current
+    if (!element) return
+
+    const handleDragOver = (e: DragEvent): void => {
       e.preventDefault()
       e.stopPropagation()
       setFileOver(true)
-    })
-    pageRef.current?.addEventListener('dragleave', (e) => {
+    }
+
+    const handleDragLeave = (e: DragEvent): void => {
       e.preventDefault()
       e.stopPropagation()
       setFileOver(false)
-    })
-    pageRef.current?.addEventListener('drop', async (event) => {
+    }
+
+    const handleDrop = async (event: DragEvent): Promise<void> => {
       event.preventDefault()
       event.stopPropagation()
       if (event.dataTransfer?.files) {
@@ -94,7 +108,7 @@ const Override: React.FC = () => {
         if (file.name.endsWith('.js') || file.name.endsWith('.yaml')) {
           const content = await readTextFile((file as File & { path: string }).path)
           try {
-            await addOverrideItem({
+            await addOverrideItemRef.current({
               name: file.name,
               type: 'local',
               file: content,
@@ -104,15 +118,20 @@ const Override: React.FC = () => {
             setFileOver(false)
           }
         } else {
-          alert(t('override.unsupportedFileType'))
+          toast.warning(tRef.current('override.unsupportedFileType'))
         }
       }
       setFileOver(false)
-    })
+    }
+
+    element.addEventListener('dragover', handleDragOver)
+    element.addEventListener('dragleave', handleDragLeave)
+    element.addEventListener('drop', handleDrop)
+
     return (): void => {
-      pageRef.current?.removeEventListener('dragover', () => {})
-      pageRef.current?.removeEventListener('dragleave', () => {})
-      pageRef.current?.removeEventListener('drop', () => {})
+      element.removeEventListener('dragover', handleDragOver)
+      element.removeEventListener('dragleave', handleDragLeave)
+      element.removeEventListener('drop', handleDrop)
     }
   }, [])
 
@@ -157,6 +176,7 @@ const Override: React.FC = () => {
         <div className="flex p-2">
           <Input
             size="sm"
+            placeholder={t('override.input.placeholder')}
             value={url}
             onValueChange={setUrl}
             endContent={
@@ -206,7 +226,7 @@ const Override: React.FC = () => {
                       })
                     }
                   } catch (e) {
-                    alert(e)
+                    toast.error(String(e))
                   }
                 } else if (key === 'new-yaml') {
                   await addOverrideItem({

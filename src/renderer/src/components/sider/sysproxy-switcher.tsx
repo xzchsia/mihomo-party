@@ -1,4 +1,5 @@
 import { Button, Card, CardBody, CardFooter, Tooltip } from '@heroui/react'
+import { toast } from '@renderer/components/base/toast'
 import BorderSwitch from '@renderer/components/base/border-swtich'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
@@ -39,14 +40,14 @@ const SysproxySwitcher: React.FC<Props> = (props) => {
   const onChange = async (enable: boolean): Promise<void> => {
     const previousState = !enable
     const tunEnabled = tun?.enable ?? false
-    
+
     // 立即更新图标
     updateTrayIconImmediate(enable, tunEnabled)
-    
+
     try {
       await patchAppConfig({ sysProxy: { enable } })
       await triggerSysProxy(enable)
-      
+
       window.electron.ipcRenderer.send('updateFloatingWindow')
       window.electron.ipcRenderer.send('updateTrayMenu')
       await updateTrayIcon()
@@ -54,7 +55,7 @@ const SysproxySwitcher: React.FC<Props> = (props) => {
       await patchAppConfig({ sysProxy: { enable: previousState } })
       // 回滚图标
       updateTrayIconImmediate(previousState, tunEnabled)
-      alert(e)
+      toast.error(String(e))
     }
   }
 
