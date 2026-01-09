@@ -1,9 +1,9 @@
 import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Button } from '@heroui/react'
 import { toast } from '@renderer/components/base/toast'
 import React, { useEffect, useState } from 'react'
-import { BaseEditor } from '../base/base-editor'
 import { getOverride, restartCore, setOverride } from '@renderer/utils/ipc'
 import { useTranslation } from 'react-i18next'
+import { BaseEditor } from '../base/base-editor'
 
 interface Props {
   id: string
@@ -15,13 +15,12 @@ const EditFileModal: React.FC<Props> = (props) => {
   const [currData, setCurrData] = useState('')
   const { t } = useTranslation()
 
-  const getContent = async (): Promise<void> => {
-    setCurrData(await getOverride(id, language === 'javascript' ? 'js' : 'yaml'))
-  }
-
   useEffect(() => {
-    getContent()
-  }, [])
+    const loadContent = async (): Promise<void> => {
+      setCurrData(await getOverride(id, language === 'javascript' ? 'js' : 'yaml'))
+    }
+    loadContent()
+  }, [id, language])
 
   return (
     <Modal

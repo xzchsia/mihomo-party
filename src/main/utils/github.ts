@@ -1,14 +1,13 @@
-import * as chromeRequest from './chromeRequest'
-import { createWriteStream, createReadStream } from 'fs'
+import { createWriteStream, createReadStream , existsSync, rmSync } from 'fs'
 import { writeFile } from 'fs/promises'
-import { mihomoCoreDir } from './dirs'
-import AdmZip from 'adm-zip'
 import { execSync } from 'child_process'
 import { platform } from 'os'
 import { join } from 'path'
-import { existsSync, rmSync } from 'fs'
 import { createGunzip } from 'zlib'
+import AdmZip from 'adm-zip'
 import { stopCore } from '../core/manager'
+import { mihomoCoreDir } from './dirs'
+import * as chromeRequest from './chromeRequest'
 import { createLogger } from './logger'
 
 const log = createLogger('GitHub')
@@ -60,9 +59,8 @@ export async function getGitHubTags(
 
   // 检查缓存
   if (!forceRefresh && versionCache.has(cacheKey)) {
-    const cache = versionCache.get(cacheKey)!
-    // 检查缓存是否过期
-    if (Date.now() - cache.timestamp < CACHE_EXPIRY) {
+    const cache = versionCache.get(cacheKey)
+    if (cache && Date.now() - cache.timestamp < CACHE_EXPIRY) {
       log.debug(`Returning cached tags for ${owner}/${repo}`)
       return cache.data
     }

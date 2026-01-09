@@ -1,9 +1,9 @@
 import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Button } from '@heroui/react'
 import React, { useEffect, useState } from 'react'
-import { BaseEditor } from '../base/base-editor'
 import { getProfileStr, setProfileStr } from '@renderer/utils/ipc'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import { BaseEditor } from '../base/base-editor'
 
 interface Props {
   id: string
@@ -16,13 +16,12 @@ const EditFileModal: React.FC<Props> = (props) => {
   const navigate = useNavigate()
   const { t } = useTranslation()
 
-  const getContent = async (): Promise<void> => {
-    setCurrData(await getProfileStr(id))
-  }
-
   useEffect(() => {
-    getContent()
-  }, [])
+    const loadContent = async (): Promise<void> => {
+      setCurrData(await getProfileStr(id))
+    }
+    loadContent()
+  }, [id])
 
   return (
     <Modal

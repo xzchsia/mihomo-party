@@ -1,5 +1,5 @@
 import { useTheme } from 'next-themes'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { NavigateFunction, useLocation, useNavigate, useRoutes } from 'react-router-dom'
 import OutboundModeSwitcher from '@renderer/components/sider/outbound-mode-switcher'
 import SysproxySwitcher from '@renderer/components/sider/sysproxy-switcher'
@@ -32,10 +32,10 @@ import { applyTheme, setNativeTheme, setTitleBarOverlay } from '@renderer/utils/
 import { platform } from '@renderer/utils/init'
 import { TitleBarOverlayOptions } from 'electron'
 import SubStoreCard from '@renderer/components/sider/substore-card'
-import MihomoIcon from './components/base/mihomo-icon'
 import { createTourDriver, getDriver, startTourIfNeeded } from '@renderer/utils/tour'
 import 'driver.js/dist/driver.css'
 import { useTranslation } from 'react-i18next'
+import MihomoIcon from './components/base/mihomo-icon'
 
 let navigate: NavigateFunction
 
@@ -78,7 +78,7 @@ const App: React.FC = () => {
   const location = useLocation()
   const page = useRoutes(routes)
 
-  const setTitlebar = (): void => {
+  const setTitlebar = useCallback((): void => {
     if (!useWindowFrame && platform !== 'darwin') {
       const options = { height: 48 } as TitleBarOverlayOptions
       try {
@@ -89,7 +89,7 @@ const App: React.FC = () => {
         // ignore
       }
     }
-  }
+  }, [useWindowFrame])
 
   useEffect(() => {
     setOrder(siderOrder)
@@ -100,6 +100,13 @@ const App: React.FC = () => {
     siderWidthValueRef.current = siderWidthValue
     resizingRef.current = resizing
   }, [siderWidthValue, resizing])
+
+  const onResizeEnd = useCallback((): void => {
+    if (resizingRef.current) {
+      setResizing(false)
+      patchAppConfig({ siderWidth: siderWidthValueRef.current })
+    }
+  }, [patchAppConfig])
 
   useEffect(() => {
     if (!tourInitialized.current) {
@@ -113,25 +120,18 @@ const App: React.FC = () => {
     setNativeTheme(appTheme)
     setTheme(appTheme)
     setTitlebar()
-  }, [appTheme, systemTheme])
+  }, [appTheme, systemTheme, setTheme, setTitlebar])
 
   useEffect(() => {
     applyTheme(customTheme || 'default.css').then(() => {
       setTitlebar()
     })
-  }, [customTheme])
+  }, [customTheme, setTitlebar])
 
   useEffect(() => {
     window.addEventListener('mouseup', onResizeEnd)
     return (): void => window.removeEventListener('mouseup', onResizeEnd)
-  }, [])
-
-  const onResizeEnd = (): void => {
-    if (resizingRef.current) {
-      setResizing(false)
-      patchAppConfig({ siderWidth: siderWidthValueRef.current })
-    }
-  }
+  }, [onResizeEnd])
 
   const onDragEnd = async (event: DragEndEvent): Promise<void> => {
     const { active, over } = event
@@ -261,17 +261,19 @@ const App: React.FC = () => {
           <div className="mt-2 mx-2">
             <OutboundModeSwitcher />
           </div>
-          <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={onDragEnd}>
-            <div className="grid grid-cols-2 gap-2 m-2">
-              <SortableContext items={order}>
-                {order.map((key: string) => {
-                  const Component = componentMap[key]
-                  if (!Component) return null
-                  return <Component key={key} />
-                })}
-              </SortableContext>
-            </div>
-          </DndContext>
+          <div style={{ overflowX: 'clip' }}>
+            <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={onDragEnd}>
+              <div className="grid grid-cols-2 gap-2 m-2">
+                <SortableContext items={order}>
+                  {order.map((key: string) => {
+                    const Component = componentMap[key]
+                    if (!Component) return null
+                    return <Component key={key} />
+                  })}
+                </SortableContext>
+              </div>
+            </DndContext>
+          </div>
         </div>
       )}
 

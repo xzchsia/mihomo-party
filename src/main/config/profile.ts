@@ -1,20 +1,19 @@
-import { getControledMihomoConfig } from './controledMihomo'
-import { mihomoProfileWorkDir, mihomoWorkDir, profileConfigPath, profilePath } from '../utils/dirs'
-import { addProfileUpdater, removeProfileUpdater } from '../core/profileUpdater'
 import { readFile, rm, writeFile } from 'fs/promises'
-import { restartCore } from '../core/manager'
-import { getAppConfig } from './app'
 import { existsSync } from 'fs'
+import { join } from 'path'
+import { app } from 'electron'
+import i18next from 'i18next'
 import * as chromeRequest from '../utils/chromeRequest'
 import { parse, stringify } from '../utils/yaml'
 import { defaultProfile } from '../utils/template'
 import { subStorePort } from '../resolve/server'
-import { join } from 'path'
-import { app } from 'electron'
 import { mihomoUpgradeConfig } from '../core/mihomoApi'
-
-import i18next from 'i18next'
+import { restartCore } from '../core/manager'
+import { addProfileUpdater, removeProfileUpdater } from '../core/profileUpdater'
+import { mihomoProfileWorkDir, mihomoWorkDir, profileConfigPath, profilePath } from '../utils/dirs'
 import { createLogger } from '../utils/logger'
+import { getAppConfig } from './app'
+import { getControledMihomoConfig } from './controledMihomo'
 
 const profileLogger = createLogger('Profile')
 
@@ -42,7 +41,7 @@ export async function setProfileConfig(config: IProfileConfig): Promise<void> {
 export async function updateProfileConfig(
   updater: (config: IProfileConfig) => IProfileConfig | Promise<IProfileConfig>
 ): Promise<IProfileConfig> {
-  let result: IProfileConfig
+  let result: IProfileConfig | undefined
   profileConfigWriteQueue = profileConfigWriteQueue.then(async () => {
     const data = await readFile(profileConfigPath(), 'utf-8')
     profileConfig = parse(data) || { items: [] }
@@ -52,7 +51,7 @@ export async function updateProfileConfig(
     await writeFile(profileConfigPath(), stringify(profileConfig), 'utf-8')
   })
   await profileConfigWriteQueue
-  return structuredClone(result!)
+  return structuredClone(result ?? profileConfig)
 }
 
 export async function getProfileItem(id: string | undefined): Promise<IProfileItem | undefined> {
